@@ -1,57 +1,77 @@
 import React, { useRef, useEffect, useState } from 'react';
 import * as d3 from 'd3-force';
 import * as d3Delaunay from 'd3-delaunay';
-import { Sparkles, Layers, Compass, Activity, Eye, Zap } from 'lucide-react';
+import { 
+  Sparkles, 
+  Layers, 
+  Compass, 
+  Activity, 
+  Eye, 
+  Zap, 
+  HelpCircle, 
+  X, 
+  MapPin, 
+  Radio, 
+  BookOpen, 
+  ArrowRight,
+  MousePointer
+} from 'lucide-react';
 import { useContentStore } from '../store/contentStore';
 import { useMapStore } from '../store/mapStore';
 import { SCIENTIFIC_AREAS } from '../data/areas';
 import { ScientificArea } from '../types';
 
-export type VoronoiVariantId = 1 | 2 | 3 | 4 | 5 | 6;
+export type UXVariantId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 interface VariantInfo {
-  id: VoronoiVariantId;
+  id: UXVariantId;
   title: string;
   badge: string;
   desc: string;
 }
 
-const VORONOI_VARIANTS: VariantInfo[] = [
+const UX_VARIANTS: VariantInfo[] = [
   {
     id: 1,
-    title: '1. V3 Original (Auras & Células Voronoi Suaves)',
-    badge: 'Voronoi Clássico + Auras',
-    desc: 'Células de Voronoi com bordas finas semi-translúcidas e auras radiais de calor temático ao redor de cada área científica.'
+    title: '1. Voronoi Clássico Puro (Mantido)',
+    badge: 'V1 Mantido',
+    desc: 'Células de Voronoi com bordas finas semi-translúcidas e auras radiais de calor nas 6 ciências.'
   },
   {
     id: 2,
-    title: '2. Mosaico de Territórios Voronoi Preenchidos',
-    badge: 'Mosaico de Vidro / Polígonos de Área',
-    desc: 'Cada nó gera uma célula poligonal preenchida com gradiente sutil de vidro na cor da ciência, iluminando o território ao passar o mouse.'
+    title: '2. Nomes Topográficos no Fundo (World Labels)',
+    badge: 'Marcas d’Água nas Áreas',
+    desc: 'Nomes das 6 grandes áreas gravados suavemente no chão do mapa com tipografia serifada editorial.'
   },
   {
     id: 3,
-    title: '3. Mapa de Calor Topográfico (Curvas de Nível Contínuas)',
-    badge: 'Curvas Isométricas / Topografia Viva',
-    desc: 'Anéis topográficos concêntricos que delimitam a densidade de ideias e proximidade temática como um mapa de relevo geográfico.'
+    title: '3. Cartão de Boas-Vindas "Decodificador do Mapa"',
+    badge: 'Onboarding Compacto',
+    desc: 'Pílula flutuante descartável no canto explicando: Esfera = Texto, Cores = Áreas, Linhas = Conexões.'
   },
   {
     id: 4,
-    title: '4. Voronoi Bio-Orgânico & Pontes Sinápticas',
-    badge: 'Células Arredondadas + Feixes Coloridos',
-    desc: 'Polígonos com cantos suavizados e conexões com gradiente luminoso vivo que pulsam ao cruzar as fronteiras das células.'
+    title: '4. Barra Inferior de Áreas com Iluminação Ativa',
+    badge: 'Fita de Áreas Interativa',
+    desc: 'Dock com as 6 ciências no rodapé; ao passar o mouse numa área, apenas seu território e nós acendem.'
   },
   {
     id: 5,
-    title: '5. Cartografia Noturna Neon (Bordas de Nanquim & Glow)',
-    badge: 'Linhas Voronoi Neon + Fundo Profundo',
-    desc: 'Fronteiras poligonais em linhas de laser neon brilhantes com nós flutuando como núcleos de energia em cada célula.'
+    title: '5. Nó em Destaque Inicial (Hero Pulse & Card Aberto)',
+    badge: 'Ponto Focal de Entrada',
+    desc: 'Um artigo central importante carrega com halo pulsante suave e mini-card editorial convidando à leitura.'
   },
   {
     id: 6,
-    title: '6. Voronoi Interativo de Destaque Territorial (Hover Focus)',
-    badge: 'Foco de Domínio + Iluminação do Território',
-    desc: 'Ao passar o mouse sobre qualquer esfera, a célula de Voronoi e todas as células vizinhas conectadas acendem em destaque com o nome do território.'
+    title: '6. Linhas com Rótulos Semânticos em Tempo Real',
+    badge: 'Rótulo das Linhas no Hover',
+    desc: 'Ao passar o mouse sobre um nó, as pontes revelam a relação intelectual ("explica", "aplica método", "contradiz").'
+  },
+  {
+    id: 7,
+    title: '7. Suíte Completa de UX Cognitiva (Fusão 2+3+4+5+6)',
+    badge: 'Experiência Completa',
+    desc: 'Combina rótulos das áreas no fundo + decodificador de entrada + fita interativa + conexões semânticas.'
   }
 ];
 
@@ -60,7 +80,9 @@ export const KnowledgeMap: React.FC = () => {
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [, setTick] = useState(0);
-  const [activeVariant, setActiveVariant] = useState<VoronoiVariantId>(1);
+  const [activeVariant, setActiveVariant] = useState<UXVariantId>(7);
+  const [showWelcomeCard, setShowWelcomeCard] = useState(true);
+  const [highlightedArea, setHighlightedArea] = useState<ScientificArea | null>(null);
 
   const {
     nodes,
@@ -275,7 +297,7 @@ export const KnowledgeMap: React.FC = () => {
   const visibleNodeMap = new Map<string, any>();
   filteredNodes.forEach((n) => visibleNodeMap.set(n.id, n));
 
-  // Cálculo das Células de Voronoi em tempo real
+  // Células de Voronoi (base mantida de V1)
   const voronoiPolygons: { node: any; path: string; center: [number, number] }[] = [];
   if (filteredNodes.length >= 3) {
     const points: [number, number][] = filteredNodes.map((n) => [n.x ?? 0, n.y ?? 0]);
@@ -295,35 +317,22 @@ export const KnowledgeMap: React.FC = () => {
     }
   }
 
-  // Centros de área para auras de fundo
   const areaCenters = Object.entries(SCIENTIFIC_AREAS).map(([area, config]) => ({
     area: area as ScientificArea,
+    label: config.label,
     x: config.center.x,
     y: config.center.y,
     color: config.accentColor,
     glow: config.glowColor
   }));
 
-  // IDs de vizinhos conectados ao nó sob hover para o Modo 6
-  const neighborIds = new Set<string>();
-  if (hoveredNodeId) {
-    neighborIds.add(hoveredNodeId);
-    connections.forEach((conn) => {
-      const srcId = typeof conn.source === 'object' ? (conn.source as any).id : conn.source;
-      const tgtId = typeof conn.target === 'object' ? (conn.target as any).id : conn.target;
-      if (srcId === hoveredNodeId) neighborIds.add(tgtId);
-      if (tgtId === hoveredNodeId) neighborIds.add(srcId);
-    });
-  }
+  // Hero node para as variações 5 e 7
+  const heroNode = filteredNodes.find((n) => n.id === 'comp-5') || filteredNodes[0];
 
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-full overflow-hidden select-none cursor-grab active:cursor-grabbing transition-colors duration-500 ${
-        activeVariant === 5
-          ? 'bg-[#03060E] text-stone-100'
-          : 'bg-stone-100 dark:bg-[#070A10]'
-      }`}
+      className="relative w-full h-full overflow-hidden select-none cursor-grab active:cursor-grabbing bg-stone-100 dark:bg-[#070A10]"
       onMouseDown={handleMouseDownMap}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -331,43 +340,43 @@ export const KnowledgeMap: React.FC = () => {
       onWheel={handleWheel}
     >
       {/* =========================================================================
-          SELETOR DE 6 VARIAÇÕES DE CAMPOS DE VORONOI
+          SELETOR DE 7 VARIAÇÕES DE UX DO GRAFO
       ========================================================================== */}
       <div className="absolute top-4 left-6 z-40 max-w-4xl pointer-events-auto">
         <div className="flex flex-col gap-2 p-2.5 rounded-2xl bg-white/95 dark:bg-[#0C111C]/95 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-2xl">
           <div className="flex items-center justify-between px-2 gap-4">
             <div className="flex items-center gap-2">
-              <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-400">
+              <span className="p-1 rounded-md bg-indigo-500/20 text-indigo-400">
                 <Compass className="w-3.5 h-3.5" />
               </span>
               <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-stone-800 dark:text-stone-200">
-                6 Variações de Campos de Voronoi (Navegar)
+                7 Variações de UX do Grafo (Navegar)
               </span>
             </div>
             <span className="text-[10px] font-mono text-stone-400 hidden sm:inline">
-              {VORONOI_VARIANTS.find((v) => v.id === activeVariant)?.desc}
+              {UX_VARIANTS.find((v) => v.id === activeVariant)?.desc}
             </span>
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            {VORONOI_VARIANTS.map((variant) => {
-              const active = activeVariant === variant.id;
+            {UX_VARIANTS.map((v) => {
+              const active = activeVariant === v.id;
               return (
                 <button
-                  key={variant.id}
+                  key={v.id}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setActiveVariant(variant.id);
+                    setActiveVariant(v.id);
                   }}
                   className={`px-3 py-1.5 rounded-xl font-mono text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     active
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 scale-105'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 scale-105'
                       : 'bg-stone-100 dark:bg-white/[0.04] text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white border border-stone-200 dark:border-white/5'
                   }`}
                 >
-                  <span>V{variant.id}</span>
+                  <span>V{v.id}</span>
                   <span className="hidden md:inline font-normal opacity-85 text-[10px]">
-                    {variant.badge.split('+')[0].trim()}
+                    {v.badge.split('+')[0].trim()}
                   </span>
                 </button>
               );
@@ -375,6 +384,101 @@ export const KnowledgeMap: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* =========================================================================
+          VARIAÇÕES 3 & 7: CARTÃO FLUTUANTE DECODIFICADOR DO MAPA (ONBOARDING)
+      ========================================================================== */}
+      {(activeVariant === 3 || activeVariant === 7) && showWelcomeCard && (
+        <div className="absolute top-24 left-6 z-30 max-w-sm pointer-events-auto animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="relative p-4 rounded-2xl bg-white/95 dark:bg-[#0E1422]/95 backdrop-blur-xl border border-indigo-500/30 shadow-2xl space-y-3">
+            <button
+              onClick={() => setShowWelcomeCard(false)}
+              className="absolute top-3 right-3 text-stone-400 hover:text-stone-200 p-1 rounded-lg"
+              title="Fechar dica"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+              <span className="font-editorial text-sm font-bold text-stone-900 dark:text-stone-100">
+                Como ler este mapa vivo?
+              </span>
+            </div>
+
+            <div className="space-y-2 text-xs font-sans text-stone-600 dark:text-stone-300">
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-500 shrink-0 mt-0.5 shadow-sm" />
+                <span>
+                  <strong>Cada esfera</strong> é uma publicação de um pesquisador.
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-4 rounded-md bg-stone-800 border border-white/20 flex items-center justify-center shrink-0 mt-0.5 font-mono text-[9px] text-amber-400">
+                  🎨
+                </span>
+                <span>
+                  <strong>As 6 cores</strong> representam as áreas do conhecimento (Biologia, Computação, Física, Matemática, Química, Humanidades).
+                </span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="w-4 h-0.5 bg-white/40 shrink-0 mt-2" />
+                <span>
+                  <strong>As linhas</strong> mostram pontes intelectuais reais entre os artigos (ex: aplicação, contradição ou derivação).
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-stone-200/60 dark:border-white/10 flex items-center justify-between text-[11px] font-mono text-stone-400">
+              <span className="flex items-center gap-1 text-indigo-400">
+                <MousePointer className="w-3 h-3" /> Clique na esfera para ler
+              </span>
+              <span>Arraste para mover</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          VARIAÇÕES 4 & 7: DOCK INFERIOR DE ÁREAS COM ILUMINAÇÃO INTERATIVA
+      ========================================================================== */}
+      {(activeVariant === 4 || activeVariant === 7) && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-auto">
+          <div className="flex items-center gap-1.5 p-2 rounded-2xl bg-white/90 dark:bg-[#0B0F19]/90 backdrop-blur-xl border border-stone-200/80 dark:border-white/10 shadow-2xl">
+            <span className="px-2 text-[10px] font-mono uppercase tracking-wider text-stone-400 hidden sm:inline">
+              Áreas:
+            </span>
+            {areaCenters.map((item) => {
+              const isHovered = highlightedArea === item.area;
+              return (
+                <button
+                  key={item.area}
+                  onMouseEnter={() => setHighlightedArea(item.area)}
+                  onMouseLeave={() => setHighlightedArea(null)}
+                  onClick={() => {
+                    const theme = SCIENTIFIC_AREAS[item.area];
+                    setPan({ x: -theme.center.x, y: -theme.center.y });
+                    setZoom(1.2);
+                  }}
+                  className="px-2.5 py-1 rounded-xl font-mono text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  style={{
+                    backgroundColor: isHovered ? `${item.color}30` : 'transparent',
+                    border: `1px solid ${isHovered ? item.color : `${item.color}35`}`,
+                    color: item.color,
+                    transform: isHovered ? 'scale(1.08)' : 'scale(1)'
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: item.color, boxShadow: `0 0 8px ${item.glow}` }}
+                  />
+                  <span>{item.area}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           PLANO DE COORDENADAS UNIFICADO DO GRAFO
@@ -388,121 +492,76 @@ export const KnowledgeMap: React.FC = () => {
           transformOrigin: '0 0'
         }}
       >
-        {/* =================== AURAS RADIAIS TOPOLÓGICAS (MODOS 1, 3, 4) =================== */}
-        {(activeVariant === 1 || activeVariant === 3 || activeVariant === 4) && (
-          <div className="absolute left-0 top-0 pointer-events-none">
-            {areaCenters.map((c) => (
+        {/* =================== VARIAÇÃO 1 (BASE MANTIDA): AURAS RADIAIS TOPOLÓGICAS =================== */}
+        <div className="absolute left-0 top-0 pointer-events-none">
+          {areaCenters.map((c) => {
+            const isAreaHighlighted = highlightedArea === c.area;
+            return (
               <div
                 key={c.area}
-                className="absolute rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl opacity-35 transition-all duration-700"
+                className="absolute rounded-full -translate-x-1/2 -translate-y-1/2 blur-3xl transition-all duration-700 pointer-events-none"
                 style={{
                   left: `${c.x}px`,
                   top: `${c.y}px`,
                   width: '320px',
                   height: '320px',
+                  opacity: isAreaHighlighted ? 0.75 : 0.35,
                   background: `radial-gradient(circle, ${c.color} 0%, ${c.glow} 45%, transparent 70%)`
                 }}
               />
+            );
+          })}
+        </div>
+
+        {/* =================== VARIAÇÕES 2 & 7: NOMES DAS ÁREAS EM SEGUNDO PLANO (WORLD LABELS) =================== */}
+        {(activeVariant === 2 || activeVariant === 7) && (
+          <div className="absolute left-0 top-0 pointer-events-none">
+            {areaCenters.map((c) => (
+              <div
+                key={`label-${c.area}`}
+                className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none transition-all duration-500"
+                style={{
+                  left: `${c.x}px`,
+                  top: `${c.y}px`
+                }}
+              >
+                <span
+                  className="font-editorial text-4xl sm:text-5xl font-bold tracking-widest uppercase select-none opacity-20 dark:opacity-15"
+                  style={{ color: c.color }}
+                >
+                  {c.area}
+                </span>
+                <span className="font-mono text-[10px] tracking-widest uppercase opacity-40 text-stone-500 mt-1">
+                  Território do Conhecimento
+                </span>
+              </div>
             ))}
           </div>
         )}
 
-        {/* =================== CAMADA SVG: CÉLULAS DE VORONOI & LINHAS DE CONEXÃO =================== */}
+        {/* =================== CAMADA SVG: POLÍGONOS DE VORONOI & LINHAS DE CONEXÃO =================== */}
         <svg
           className="overflow-visible absolute left-0 top-0 pointer-events-none"
           style={{ width: 1, height: 1 }}
         >
-          <defs>
-            {/* Gradientes para conexões entre duas ciências no Modo 4 */}
-            {connections.map((conn) => {
-              const srcId = typeof conn.source === 'object' ? (conn.source as any).id : conn.source;
-              const tgtId = typeof conn.target === 'object' ? (conn.target as any).id : conn.target;
-              const src = visibleNodeMap.get(srcId);
-              const tgt = visibleNodeMap.get(tgtId);
-              if (!src || !tgt) return null;
-              const colorA = SCIENTIFIC_AREAS[src.area as ScientificArea]?.accentColor || '#10B981';
-              const colorB = SCIENTIFIC_AREAS[tgt.area as ScientificArea]?.accentColor || '#06B6D4';
-              return (
-                <linearGradient
-                  key={`voronoi-grad-${conn.id}`}
-                  id={`voronoi-grad-${conn.id}`}
-                  gradientUnits="userSpaceOnUse"
-                  x1={src.x}
-                  y1={src.y}
-                  x2={tgt.x}
-                  y2={tgt.y}
-                >
-                  <stop offset="0%" stopColor={colorA} stopOpacity="0.85" />
-                  <stop offset="100%" stopColor={colorB} stopOpacity="0.85" />
-                </linearGradient>
-              );
-            })}
-          </defs>
-
-          {/* ======================= POLÍGONOS DE VORONOI ======================= */}
+          {/* Células de Voronoi (Base V1 Mantida) */}
           {voronoiPolygons.map(({ node, path }) => {
             const areaTheme = SCIENTIFIC_AREAS[node.area as ScientificArea];
             const isHovered = hoveredNodeId === node.id;
             const isSelected = selectedNodeId === node.id;
-            const isNeighbor = neighborIds.has(node.id);
+            const isAreaHighlighted = highlightedArea === node.area;
 
-            // ============ CONFIGURAÇÃO POR VARIANTE ============
-            let fill = 'none';
-            let stroke = 'rgba(148, 163, 184, 0.12)';
-            let strokeWidth = 1;
-            let strokeDasharray = undefined;
-            let filter = undefined;
-
-            if (activeVariant === 1) {
-              // V1: Linhas suaves semi-translúcidas com leve cor da área
-              stroke = isHovered || isSelected ? areaTheme.accentColor : `${areaTheme.accentColor}35`;
-              strokeWidth = isHovered || isSelected ? 1.8 : 0.8;
-              fill = isHovered ? `${areaTheme.accentColor}12` : 'none';
-            } else if (activeVariant === 2) {
-              // V2: Mosaico de Territórios Preenchidos com Vidro
-              fill = isHovered
-                ? `${areaTheme.accentColor}30`
-                : isSelected
-                ? `${areaTheme.accentColor}25`
-                : `${areaTheme.accentColor}0C`;
-              stroke = isHovered ? areaTheme.accentColor : `${areaTheme.accentColor}40`;
-              strokeWidth = isHovered ? 2 : 1;
-            } else if (activeVariant === 3) {
-              // V3: Curvas de nível isométricas contínuas
-              stroke = `${areaTheme.accentColor}50`;
-              strokeWidth = 1;
-              strokeDasharray = '4 4';
-              fill = isHovered ? `${areaTheme.accentColor}18` : 'none';
-            } else if (activeVariant === 4) {
-              // V4: Voronoi Bio-Orgânico suave
-              stroke = isHovered ? areaTheme.accentColor : `${areaTheme.accentColor}30`;
-              strokeWidth = isHovered ? 2 : 1.2;
-              fill = isHovered ? `${areaTheme.accentColor}20` : `${areaTheme.accentColor}08`;
-            } else if (activeVariant === 5) {
-              // V5: Laser Neon Noturno
-              stroke = isHovered
-                ? '#FFFFFF'
-                : isSelected
-                ? areaTheme.accentColor
-                : `${areaTheme.accentColor}70`;
-              strokeWidth = isHovered ? 2.5 : 1.2;
-              fill = isHovered ? `${areaTheme.accentColor}25` : 'none';
-            } else if (activeVariant === 6) {
-              // V6: Destaque Territorial Conectado (Hover Focus)
-              if (isHovered) {
-                fill = `${areaTheme.accentColor}40`;
-                stroke = '#FFFFFF';
-                strokeWidth = 2.5;
-              } else if (isNeighbor) {
-                fill = `${areaTheme.accentColor}18`;
-                stroke = areaTheme.accentColor;
-                strokeWidth = 1.8;
-              } else {
-                fill = 'none';
-                stroke = theme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-                strokeWidth = 0.6;
-              }
-            }
+            let stroke = isHovered || isSelected 
+              ? areaTheme.accentColor 
+              : isAreaHighlighted 
+              ? `${areaTheme.accentColor}80`
+              : `${areaTheme.accentColor}35`;
+            let strokeWidth = isHovered || isSelected ? 1.8 : isAreaHighlighted ? 1.4 : 0.8;
+            let fill = isHovered 
+              ? `${areaTheme.accentColor}18` 
+              : isAreaHighlighted 
+              ? `${areaTheme.accentColor}0C`
+              : 'none';
 
             return (
               <path
@@ -511,23 +570,12 @@ export const KnowledgeMap: React.FC = () => {
                 fill={fill}
                 stroke={stroke}
                 strokeWidth={strokeWidth}
-                strokeDasharray={strokeDasharray}
                 className="transition-all duration-300"
               />
             );
           })}
 
-          {/* ======================= CURVAS CONCÊNTRICAS TOPOGRÁFICAS (MODO 3) ======================= */}
-          {activeVariant === 3 &&
-            areaCenters.map((c) => (
-              <g key={`topo-${c.area}`}>
-                <circle cx={c.x} cy={c.y} r="65" fill="none" stroke={c.color} strokeOpacity="0.45" strokeWidth="1" strokeDasharray="3 3" />
-                <circle cx={c.x} cy={c.y} r="120" fill="none" stroke={c.color} strokeOpacity="0.30" strokeWidth="1" />
-                <circle cx={c.x} cy={c.y} r="180" fill="none" stroke={c.color} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="6 4" />
-              </g>
-            ))}
-
-          {/* ======================= LINHAS DE CONEXÃO DO GRAFO ======================= */}
+          {/* Linhas de Conexão */}
           {connections.map((conn) => {
             const srcId = typeof conn.source === 'object' ? (conn.source as any).id : conn.source;
             const tgtId = typeof conn.target === 'object' ? (conn.target as any).id : conn.target;
@@ -541,37 +589,59 @@ export const KnowledgeMap: React.FC = () => {
             const isConnectedToHovered =
               hoveredNodeId && (src.id === hoveredNodeId || tgt.id === hoveredNodeId);
 
-            let strokeColor =
-              theme === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(15, 23, 42, 0.22)';
-            let strokeWidth = 1.2;
+            const strokeColor =
+              isConnectedToSelected || isConnectedToHovered
+                ? theme === 'dark'
+                  ? '#F8FAFC'
+                  : '#0F172A'
+                : theme === 'dark'
+                ? 'rgba(255, 255, 255, 0.22)'
+                : 'rgba(15, 23, 42, 0.22)';
 
-            if (activeVariant === 4) {
-              // Modo 4: Feixes gradiente vivos entre as duas áreas
-              strokeColor = `url(#voronoi-grad-${conn.id})`;
-              strokeWidth = isConnectedToSelected || isConnectedToHovered ? 3 : 1.8;
-            } else if (activeVariant === 5) {
-              // Modo 5: Laser neon
-              const srcTheme = SCIENTIFIC_AREAS[src.area as ScientificArea];
-              strokeColor = isConnectedToSelected || isConnectedToHovered
-                ? '#FFFFFF'
-                : `${srcTheme.accentColor}80`;
-              strokeWidth = isConnectedToSelected || isConnectedToHovered ? 2.5 : 1.4;
-            } else if (isConnectedToSelected || isConnectedToHovered) {
-              strokeColor = theme === 'dark' ? '#F8FAFC' : '#0F172A';
-              strokeWidth = 2.2;
-            }
+            const strokeWidth =
+              isConnectedToSelected || isConnectedToHovered ? 2.2 : 1.2;
 
             return (
-              <line
-                key={`link-${conn.id}`}
-                x1={src.x}
-                y1={src.y}
-                x2={tgt.x}
-                y2={tgt.y}
-                stroke={strokeColor}
-                strokeWidth={strokeWidth}
-                strokeLinecap="round"
-              />
+              <g key={`link-${conn.id}`}>
+                <line
+                  x1={src.x}
+                  y1={src.y}
+                  x2={tgt.x}
+                  y2={tgt.y}
+                  stroke={strokeColor}
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                />
+
+                {/* =================== VARIAÇÕES 6 & 7: RÓTULOS SEMÂNTICOS NO HOVER =================== */}
+                {(activeVariant === 6 || activeVariant === 7) &&
+                  (isConnectedToHovered || isConnectedToSelected) && (
+                    <g>
+                      <rect
+                        x={(src.x + tgt.x) / 2 - 45}
+                        y={(src.y + tgt.y) / 2 - 12}
+                        width="90"
+                        height="18"
+                        rx="9"
+                        fill={theme === 'dark' ? '#0E1422' : '#FFFFFF'}
+                        stroke={theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={(src.x + tgt.x) / 2}
+                        y={(src.y + tgt.y) / 2}
+                        dominantBaseline="central"
+                        textAnchor="middle"
+                        fill={theme === 'dark' ? '#94A3B8' : '#475569'}
+                        fontSize="9"
+                        fontFamily="Space Mono, monospace"
+                        fontWeight="bold"
+                      >
+                        {conn.type}
+                      </text>
+                    </g>
+                  )}
+              </g>
             );
           })}
         </svg>
@@ -581,7 +651,8 @@ export const KnowledgeMap: React.FC = () => {
           const areaTheme = SCIENTIFIC_AREAS[node.area as ScientificArea];
           const isSelected = selectedNodeId === node.id;
           const isHovered = hoveredNodeId === node.id;
-          const isNeighbor = neighborIds.has(node.id);
+          const isHero = (activeVariant === 5 || activeVariant === 7) && heroNode?.id === node.id;
+          const isAreaHighlighted = highlightedArea === node.area;
 
           return (
             <div
@@ -603,7 +674,7 @@ export const KnowledgeMap: React.FC = () => {
               onMouseEnter={() => setHoveredNodeId(node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
               className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer ${
-                isSelected ? 'z-40' : isHovered ? 'z-30' : 'z-20'
+                isSelected ? 'z-40' : isHovered ? 'z-30' : isHero ? 'z-30' : 'z-20'
               }`}
               style={{
                 left: `${node.x}px`,
@@ -611,38 +682,58 @@ export const KnowledgeMap: React.FC = () => {
               }}
             >
               <div className="relative flex items-center justify-center">
-                {/* Visual do nó: anel topológico + núcleo de cor */}
+                {/* =================== VARIAÇÕES 5 & 7: HERO PULSE DE ENTRADA =================== */}
+                {isHero && !isSelected && !isHovered && (
+                  <div
+                    className="absolute -inset-3 rounded-full animate-ping opacity-35 pointer-events-none"
+                    style={{ backgroundColor: areaTheme.accentColor }}
+                  />
+                )}
+
+                {/* Esfera 3D do Nó */}
                 <div
                   className={`rounded-full flex items-center justify-center transition-all duration-200 ${
                     isSelected
                       ? 'scale-125'
                       : isHovered
                       ? 'scale-115'
-                      : activeVariant === 6 && isNeighbor
-                      ? 'scale-105'
+                      : isAreaHighlighted
+                      ? 'scale-110'
+                      : isHero
+                      ? 'scale-110'
                       : 'hover:scale-110'
                   }`}
                   style={{
                     width: '32px',
                     height: '32px',
-                    background:
-                      activeVariant === 5
-                        ? `radial-gradient(circle at 35% 35%, #FFFFFF 0%, ${areaTheme.accentColor} 55%, #03060E 100%)`
-                        : `radial-gradient(circle at 32% 32%, #FFFFFF 0%, ${areaTheme.accentColor} 50%, #070A10 100%)`,
+                    background: `radial-gradient(circle at 32% 32%, #FFFFFF 0%, ${areaTheme.accentColor} 50%, #070A10 100%)`,
                     boxShadow: isSelected
                       ? `0 0 20px ${areaTheme.accentColor}`
                       : isHovered
                       ? `0 0 16px ${areaTheme.accentColor}`
+                      : isHero
+                      ? `0 0 18px ${areaTheme.accentColor}`
                       : `0 2px 8px ${areaTheme.glowColor}`
                   }}
                 >
                   <div className="w-1.5 h-1.5 rounded-full bg-white/70" />
 
-                  {/* Anel indicador de seleção */}
                   {isSelected && (
                     <div className="absolute -inset-1.5 rounded-full border-2 border-white dark:border-stone-100" />
                   )}
                 </div>
+
+                {/* =================== VARIAÇÕES 5 & 7: MINI-CARD ABERTO DO NÓ HERO =================== */}
+                {isHero && !isHovered && !selectedNodeId && (
+                  <div className="absolute top-full mt-2.5 px-3 py-1.5 rounded-xl bg-white/95 dark:bg-[#0E1422]/95 border border-indigo-500/40 shadow-xl pointer-events-none flex flex-col items-center gap-0.5 whitespace-nowrap z-40 animate-bounce">
+                    <span className="font-mono text-[9px] uppercase tracking-wider text-indigo-400 font-bold flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5" /> Clique para explorar
+                    </span>
+                    <span className="font-editorial text-xs font-semibold text-stone-900 dark:text-stone-100">
+                      {node.title}
+                    </span>
+                  </div>
+                )}
 
                 {/* Tooltip do Nó em Hover */}
                 {(isHovered || isSelected) && (
