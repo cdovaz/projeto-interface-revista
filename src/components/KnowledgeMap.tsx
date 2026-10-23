@@ -25,6 +25,22 @@ export const KnowledgeMap: React.FC = () => {
 
   const { zoom, setZoom, pan, setPan, theme } = useMapStore();
 
+  // Modelos de Variações da Barra de Filtragem
+  type FilterVariation =
+    | 'v1_multiselect'
+    | 'v2_ghosting'
+    | 'v3_drilldown'
+    | 'v4_interdisciplinar'
+    | 'v5_keyboard_dock'
+    | 'v6_hud_summary';
+
+  const [filterVariation, setFilterVariation] = useState<FilterVariation>('v1_multiselect');
+  const [selectedMultiAreas, setSelectedMultiAreas] = useState<ScientificArea[]>([]);
+  const [ghostLevel, setGhostLevel] = useState<number>(0.15);
+  const [activeSubtopic, setActiveSubtopic] = useState<string | null>(null);
+  const [bridgeAreaA, setBridgeAreaA] = useState<ScientificArea>('Biologia');
+  const [bridgeAreaB, setBridgeAreaB] = useState<ScientificArea>('Computação');
+
   const isDraggingMapRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
 
@@ -211,20 +227,159 @@ export const KnowledgeMap: React.FC = () => {
     setZoom(zoom * zoomFactor);
   };
 
-  const filteredNodes = simNodesRef.current.filter((n) => {
-    if (activeAreaFilter && n.area !== activeAreaFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchTitle = n.title.toLowerCase().includes(q);
-      const matchAuthor = n.author.name.toLowerCase().includes(q);
-      const matchTags = n.tags?.some((t: string) => t.toLowerCase().includes(q));
-      if (!matchTitle && !matchAuthor && !matchTags) return false;
-    }
-    return true;
-  });
+  // Suporte a atalhos de teclado para a Variação 5 (Dock & Teclado)
+  useEffect(() => {
+    if (filterVariation !== 'v5_keyboard_dock') return;
 
-  const visibleNodeMap = new Map<string, any>();
-  filteredNodes.forEach((n) => visibleNodeMap.set(n.id, n));
+    const areaList: ScientificArea[] = [
+      'Biologia',
+      'Química',
+      'Física',
+      'Computação',
+      'Matemática',
+      'Humanidades'
+    ];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.key === '0') {
+        setActiveAreaFilter(null);
+        setPan({ x: 0, y: 0 });
+      } else {
+        const num = parseInt(e.key, 10);
+        if (num >= 1 && num <= 6) {
+          const area = areaList[num - 1];
+          setActiveAreaFilter(area);
+          const theme = SCIENTIFIC_AREAS[area];
+          setPan({
+            x: -theme.center.x * zoom,
+            y: -theme.center.y * zoom
+          });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filterVariation, zoom, setActiveAreaFilter, setPan]);
+
+  // Lista de subtópicos disponíveis para a variação 3 (Drill-down)
+  const availableSubtopics = React.useMemo(() => {
+    if (!activeAreaFilter) return [];
+    return Array.from(
+      new Set(
+        nodes
+          .filter((n) => n.area === activeAreaFilter)
+          .map((n) => n.subtopic)
+          .filter(Boolean)
+      )
+    );
+  }, [nodes, activeAreaFilter]);
+
+  // Mapa de nós por ID
+  const nodeByIdMap = React.useMemo(() => {
+    return new Map(simNodesRef.current.map((n) => [n.id, n]));
+  }, [nodes, connections]);
+
+  // Identificação de nós de pontes interdisciplinares para Variação 4
+  const bridgeNodeIds = React.useMemo(() => {
+    if (filterVariation !== 'v4_interdisciplinar' || !bridgeAreaA || !bridgeAreaB) {
+      return new Set<string>();
+    }
+    const set = new Set<string>();
+    connections.forEach((c) => {
+      const srcId = typeof c.source === 'object' ? (c.source as any).id : c.source;
+      const tgtId = typeof c.target === 'object' ? (c.target as any).id : c.target;
+      const src = nodeByIdMap.get(srcId);
+      const tgt = nodeByIdMap.get(tgtId);
+      if (!src || !tgt) return;
+      if (
+        (src.area === bridgeAreaA && tgt.area === bridgeAreaB) ||
+        (src.area === bridgeAreaB && tgt.area === bridgeAreaA)
+      ) {
+        set.add(srcId);
+        set.add(tgtId);
+      }
+    });
+    return set;
+  }, [filterVariation, bridgeAreaA, bridgeAreaB, connections, nodeByIdMap]);
+
+  // Separação de nós visíveis e nós em modo ghost
+  const { visibleNodes, ghostedNodeIds } = React.useMemo(() => {
+    const ghosted = new Set<string>();
+
+    const filtered = simNodesRef.current.filter((n) => {
+      // 1. Busca textual global
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTitle = n.title.toLowerCase().includes(q);
+        const matchAuthor = n.author.name.toLowerCase().includes(q);
+        const matchTags = n.tags?.some((t: string) => t.toLowerCase().includes(q));
+        if (!matchTitle && !matchAuthor && !matchTags) return false;
+      }
+
+      // 2. Variação 1: Multisseleção
+      if (filterVariation === 'v1_multiselect') {
+        if (selectedMultiAreas.length > 0) {
+          return selectedMultiAreas.includes(n.area);
+        }
+        return true;
+      }
+
+      // 3. Variação 2: Ghosting / Foco
+      if (filterVariation === 'v2_ghosting') {
+        if (activeAreaFilter) {
+          if (n.area !== activeAreaFilter) {
+            ghosted.add(n.id);
+          }
+        }
+        return true;
+      }
+
+      // 4. Variação 3: Drill-down por Subtópico
+      if (filterVariation === 'v3_drilldown') {
+        if (activeAreaFilter) {
+          if (n.area !== activeAreaFilter) return false;
+          if (activeSubtopic && n.subtopic !== activeSubtopic) return false;
+        }
+        return true;
+      }
+
+      // 5. Variação 4: Pontes Interdisciplinares
+      if (filterVariation === 'v4_interdisciplinar') {
+        if (bridgeAreaA && bridgeAreaB) {
+          return bridgeNodeIds.has(n.id);
+        }
+        return true;
+      }
+
+      // 6. Variações 5 (Dock) e 6 (HUD): filtro direto de área
+      if (activeAreaFilter) {
+        return n.area === activeAreaFilter;
+      }
+
+      return true;
+    });
+
+    return { visibleNodes: filtered, ghostedNodeIds: ghosted };
+  }, [
+    simNodesRef.current,
+    filterVariation,
+    selectedMultiAreas,
+    activeAreaFilter,
+    activeSubtopic,
+    bridgeAreaA,
+    bridgeAreaB,
+    searchQuery,
+    bridgeNodeIds
+  ]);
+
+  const visibleNodeMap = React.useMemo(() => {
+    const map = new Map<string, any>();
+    visibleNodes.forEach((n) => map.set(n.id, n));
+    return map;
+  }, [visibleNodes]);
 
   return (
     <div
@@ -236,104 +391,592 @@ export const KnowledgeMap: React.FC = () => {
       onMouseLeave={handleMouseUp}
       onWheel={handleWheel}
     >
-      {/* Seletor de Tags no Canto Superior Esquerdo */}
+      {/* ========================================================= */}
+      {/* SELETOR DE TAGS E VARIAÇÕES NO CANTO SUPERIOR ESQUERDO   */}
+      {/* ========================================================= */}
       <div
         className="absolute top-4 left-4 sm:top-5 sm:left-6 z-30 pointer-events-auto max-w-[calc(100vw-3rem)]"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl p-3 sm:p-3.5 border border-stone-200 dark:border-stone-800 shadow-xl">
-          {/* Legenda com a frase solicitada */}
+        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-md rounded-2xl p-3.5 border border-stone-200 dark:border-stone-800 shadow-xl max-w-xl transition-all">
+          
+          {/* Seletor de Modelo / Variação */}
+          <div className="flex items-center gap-1.5 mb-2.5 pb-2 border-b border-stone-200/80 dark:border-stone-800/80 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-stone-600 dark:text-stone-300 mr-1 shrink-0">
+              Variações da Barra:
+            </span>
+            {[
+              { id: 'v1_multiselect', label: '1. Multisseleção' },
+              { id: 'v2_ghosting', label: '2. Foco & Ghosting' },
+              { id: 'v3_drilldown', label: '3. Subtópicos' },
+              { id: 'v4_interdisciplinar', label: '4. Interdisciplinar' },
+              { id: 'v5_keyboard_dock', label: '5. Dock & Teclas' },
+              { id: 'v6_hud_summary', label: '6. Card HUD' },
+            ].map((v) => (
+              <button
+                key={v.id}
+                onClick={() => {
+                  setFilterVariation(v.id as FilterVariation);
+                  setActiveSubtopic(null);
+                }}
+                className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold whitespace-nowrap transition-colors ${
+                  filterVariation === v.id
+                    ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Legenda com a frase obrigatória */}
           <div className="flex items-center gap-2 mb-2">
-            <span className="w-2 h-2 rounded-full bg-stone-400 dark:bg-stone-500" />
-            <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 tracking-tight">
+            <span className="w-2 h-2 rounded-full bg-stone-500" />
+            <span className="text-xs font-semibold text-stone-800 dark:text-stone-200 tracking-tight">
               selecione qual área de artigos você quer ver
             </span>
-            {activeAreaFilter && (
-              <button
-                onClick={() => {
-                  setActiveAreaFilter(null);
-                  setPan({ x: 0, y: 0 });
-                }}
-                className="ml-auto text-[11px] text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 underline font-medium transition-colors"
-              >
-                Limpar
-              </button>
-            )}
+
+            {/* Badge de contexto da variação */}
+            <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-mono bg-stone-100 dark:bg-stone-800 text-stone-500">
+              {filterVariation === 'v1_multiselect' && 'Multi-tags'}
+              {filterVariation === 'v2_ghosting' && 'Modo Ghost'}
+              {filterVariation === 'v3_drilldown' && 'Área ➔ Subtópico'}
+              {filterVariation === 'v4_interdisciplinar' && 'Ponte A ⟷ B'}
+              {filterVariation === 'v5_keyboard_dock' && 'Atalhos 1 a 6'}
+              {filterVariation === 'v6_hud_summary' && 'Sumário da Área'}
+            </span>
           </div>
 
-          {/* Tags de cada Área com cores chapadas */}
-          <div className="flex flex-wrap gap-1.5 items-center">
-            {/* Tag para ver todas */}
-            <button
-              onClick={() => {
-                setActiveAreaFilter(null);
-                setPan({ x: 0, y: 0 });
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                activeAreaFilter === null
-                  ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400 dark:hover:bg-stone-700'
-              }`}
-            >
-              Todas
-            </button>
-
-            {/* Tags individuais por área de conhecimento */}
-            {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
-              const areaTheme = SCIENTIFIC_AREAS[area];
-              const isActive = activeAreaFilter === area;
-              const count = nodes.filter((n) => n.area === area).length;
-
-              return (
+          {/* ======================================================== */}
+          {/* VARIAÇÃO 1: MULTISSELEÇÃO COMBINADA                      */}
+          {/* ======================================================== */}
+          {filterVariation === 'v1_multiselect' && (
+            <div>
+              <div className="flex flex-wrap gap-1.5 items-center">
                 <button
-                  key={area}
-                  onClick={() => {
-                    if (isActive) {
-                      setActiveAreaFilter(null);
-                      setPan({ x: 0, y: 0 });
-                    } else {
-                      setActiveAreaFilter(area);
-                      setPan({
-                        x: -areaTheme.center.x * zoom,
-                        y: -areaTheme.center.y * zoom
-                      });
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                    isActive
-                      ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
-                      : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300 dark:hover:bg-stone-700/80 border border-transparent'
+                  onClick={() => setSelectedMultiAreas([])}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    selectedMultiAreas.length === 0
+                      ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
                   }`}
+                >
+                  Todas as áreas
+                </button>
+
+                {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
+                  const areaTheme = SCIENTIFIC_AREAS[area];
+                  const isSelected = selectedMultiAreas.includes(area);
+                  const count = nodes.filter((n) => n.area === area).length;
+
+                  return (
+                    <button
+                      key={area}
+                      onClick={() => {
+                        setSelectedMultiAreas((prev) =>
+                          prev.includes(area) ? prev.filter((a) => a !== area) : [...prev, area]
+                        );
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        isSelected
+                          ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                      }`}
+                      style={{
+                        backgroundColor: isSelected ? areaTheme.accentColor : undefined
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: isSelected ? '#FFFFFF' : areaTheme.accentColor }}
+                      />
+                      <span>{area}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono ${
+                          isSelected
+                            ? 'bg-black/20 text-white'
+                            : 'bg-stone-200/70 text-stone-500 dark:bg-stone-700 dark:text-stone-400'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedMultiAreas.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-between text-[11px] text-stone-500">
+                  <span>
+                    Exibindo artigos de <strong>{selectedMultiAreas.length}</strong> áreas combinadas ({visibleNodes.length} artigos)
+                  </span>
+                  <button
+                    onClick={() => setSelectedMultiAreas([])}
+                    className="underline text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 font-medium"
+                  >
+                    Resetar
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VARIAÇÃO 2: FOCO ESPACIAL & GHOSTING (ATENUAÇÃO)         */}
+          {/* ======================================================== */}
+          {filterVariation === 'v2_ghosting' && (
+            <div>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <button
+                  onClick={() => {
+                    setActiveAreaFilter(null);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    activeAreaFilter === null
+                      ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
+                  }`}
+                >
+                  Todas (100% visíveis)
+                </button>
+
+                {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
+                  const areaTheme = SCIENTIFIC_AREAS[area];
+                  const isActive = activeAreaFilter === area;
+
+                  return (
+                    <button
+                      key={area}
+                      onClick={() => {
+                        if (isActive) {
+                          setActiveAreaFilter(null);
+                          setPan({ x: 0, y: 0 });
+                        } else {
+                          setActiveAreaFilter(area);
+                          setPan({
+                            x: -areaTheme.center.x * zoom,
+                            y: -areaTheme.center.y * zoom
+                          });
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        isActive
+                          ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                      }`}
+                      style={{
+                        backgroundColor: isActive ? areaTheme.accentColor : undefined
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: isActive ? '#FFFFFF' : areaTheme.accentColor }}
+                      />
+                      <span>{area}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Slider de Opacidade Fantasma */}
+              <div className="mt-2.5 pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between text-[11px] text-stone-500">
+                <span className="flex items-center gap-1.5">
+                  <span>Opacidade dos nós secundários:</span>
+                  <strong className="font-mono text-stone-700 dark:text-stone-300">
+                    {Math.round(ghostLevel * 100)}%
+                  </strong>
+                </span>
+                <div className="flex gap-1">
+                  {[0.05, 0.15, 0.35].map((lvl) => (
+                    <button
+                      key={lvl}
+                      onClick={() => setGhostLevel(lvl)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono ${
+                        ghostLevel === lvl
+                          ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900'
+                          : 'bg-stone-100 dark:bg-stone-800 text-stone-500'
+                      }`}
+                    >
+                      {Math.round(lvl * 100)}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VARIAÇÃO 3: DRILL-DOWN EM CASCATA (ÁREA + SUBTÓPICOS)   */}
+          {/* ======================================================== */}
+          {filterVariation === 'v3_drilldown' && (
+            <div>
+              {/* Linha 1: Áreas */}
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <button
+                  onClick={() => {
+                    setActiveAreaFilter(null);
+                    setActiveSubtopic(null);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    activeAreaFilter === null
+                      ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
+                  }`}
+                >
+                  Todas
+                </button>
+
+                {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
+                  const areaTheme = SCIENTIFIC_AREAS[area];
+                  const isActive = activeAreaFilter === area;
+
+                  return (
+                    <button
+                      key={area}
+                      onClick={() => {
+                        if (isActive) {
+                          setActiveAreaFilter(null);
+                          setActiveSubtopic(null);
+                          setPan({ x: 0, y: 0 });
+                        } else {
+                          setActiveAreaFilter(area);
+                          setActiveSubtopic(null);
+                          setPan({
+                            x: -areaTheme.center.x * zoom,
+                            y: -areaTheme.center.y * zoom
+                          });
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        isActive
+                          ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                      }`}
+                      style={{
+                        backgroundColor: isActive ? areaTheme.accentColor : undefined
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: isActive ? '#FFFFFF' : areaTheme.accentColor }}
+                      />
+                      <span>{area}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Linha 2: Subtópicos da Área Ativa */}
+              {activeAreaFilter && availableSubtopics.length > 0 && (
+                <div className="mt-2.5 pt-2 border-t border-stone-200/80 dark:border-stone-800/80">
+                  <div className="text-[10px] uppercase font-bold text-stone-500 mb-1.5">
+                    Subtópicos de {activeAreaFilter}:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setActiveSubtopic(null)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
+                        activeSubtopic === null
+                          ? 'bg-stone-800 text-white dark:bg-stone-200 dark:text-stone-900'
+                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
+                      }`}
+                    >
+                      Todos os subtópicos
+                    </button>
+                    {availableSubtopics.map((sub) => {
+                      const isSubActive = activeSubtopic === sub;
+                      const count = nodes.filter(
+                        (n) => n.area === activeAreaFilter && n.subtopic === sub
+                      ).length;
+
+                      return (
+                        <button
+                          key={sub}
+                          onClick={() => setActiveSubtopic(isSubActive ? null : sub)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all ${
+                            isSubActive
+                              ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900 ring-1 ring-stone-900'
+                              : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                          }`}
+                        >
+                          <span>{sub}</span>
+                          <span className="opacity-60 font-mono text-[9px]">({count})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VARIAÇÃO 4: PONTES INTERDISCIPLINARES (DE ➔ PARA)       */}
+          {/* ======================================================== */}
+          {filterVariation === 'v4_interdisciplinar' && (
+            <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                {/* Área A */}
+                <div className="flex-1 bg-stone-50 dark:bg-stone-800/50 p-2 rounded-xl border border-stone-200 dark:border-stone-800">
+                  <div className="text-[10px] font-bold text-stone-500 uppercase mb-1">
+                    Área Origem:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => (
+                      <button
+                        key={`from-${area}`}
+                        onClick={() => setBridgeAreaA(area)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all ${
+                          bridgeAreaA === area
+                            ? 'text-white'
+                            : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300'
+                        }`}
+                        style={{
+                          backgroundColor:
+                            bridgeAreaA === area
+                              ? SCIENTIFIC_AREAS[area].accentColor
+                              : undefined
+                        }}
+                      >
+                        {area}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="text-center font-bold text-stone-400">⟷</div>
+
+                {/* Área B */}
+                <div className="flex-1 bg-stone-50 dark:bg-stone-800/50 p-2 rounded-xl border border-stone-200 dark:border-stone-800">
+                  <div className="text-[10px] font-bold text-stone-500 uppercase mb-1">
+                    Conectada Com:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => (
+                      <button
+                        key={`to-${area}`}
+                        onClick={() => setBridgeAreaB(area)}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] font-medium transition-all ${
+                          bridgeAreaB === area
+                            ? 'text-white'
+                            : 'bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300'
+                        }`}
+                        style={{
+                          backgroundColor:
+                            bridgeAreaB === area
+                              ? SCIENTIFIC_AREAS[area].accentColor
+                              : undefined
+                        }}
+                      >
+                        {area}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-1.5 flex items-center justify-between text-[11px] text-stone-500">
+                <span>
+                  Mostrando pontes entre <strong>{bridgeAreaA}</strong> e <strong>{bridgeAreaB}</strong>
+                </span>
+                <span className="font-mono font-semibold text-stone-800 dark:text-stone-200">
+                  {visibleNodes.length} artigos interdisciplinares
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VARIAÇÃO 5: DOCK MINIMALISTA & ATALHOS DE TECLADO       */}
+          {/* ======================================================== */}
+          {filterVariation === 'v5_keyboard_dock' && (
+            <div>
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  onClick={() => {
+                    setActiveAreaFilter(null);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-semibold transition-all flex items-center gap-1.5 ${
+                    activeAreaFilter === null
+                      ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
+                  }`}
+                  title="Pressione [0] no teclado"
+                >
+                  <span className="px-1 py-0.2 bg-black/20 dark:bg-stone-300/40 rounded text-[9px]">0</span>
+                  <span>Todas</span>
+                </button>
+
+                {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area, idx) => {
+                  const areaTheme = SCIENTIFIC_AREAS[area];
+                  const isActive = activeAreaFilter === area;
+
+                  return (
+                    <button
+                      key={area}
+                      onClick={() => {
+                        if (isActive) {
+                          setActiveAreaFilter(null);
+                          setPan({ x: 0, y: 0 });
+                        } else {
+                          setActiveAreaFilter(area);
+                          setPan({
+                            x: -areaTheme.center.x * zoom,
+                            y: -areaTheme.center.y * zoom
+                          });
+                        }
+                      }}
+                      className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        isActive
+                          ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                      }`}
+                      style={{
+                        backgroundColor: isActive ? areaTheme.accentColor : undefined
+                      }}
+                      title={`Pressione [${idx + 1}] no teclado`}
+                    >
+                      <span
+                        className={`px-1 py-0.2 rounded text-[9px] font-mono ${
+                          isActive
+                            ? 'bg-black/25 text-white'
+                            : 'bg-stone-200 text-stone-600 dark:bg-stone-700 dark:text-stone-300'
+                        }`}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span>{area}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="mt-2 pt-1.5 border-t border-stone-100 dark:border-stone-800 text-[10px] text-stone-400 flex items-center justify-between">
+                <span>Dica: Pressione as teclas <strong>1</strong> a <strong>6</strong> (ou <strong>0</strong>) no teclado físico para alternar instantaneamente!</span>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* VARIAÇÃO 6: CARD HUD DE EXPLORAÇÃO COM RESUMO           */}
+          {/* ======================================================== */}
+          {filterVariation === 'v6_hud_summary' && (
+            <div>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <button
+                  onClick={() => {
+                    setActiveAreaFilter(null);
+                    setPan({ x: 0, y: 0 });
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                    activeAreaFilter === null
+                      ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
+                  }`}
+                >
+                  Geral
+                </button>
+
+                {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
+                  const areaTheme = SCIENTIFIC_AREAS[area];
+                  const isActive = activeAreaFilter === area;
+
+                  return (
+                    <button
+                      key={area}
+                      onClick={() => {
+                        if (isActive) {
+                          setActiveAreaFilter(null);
+                          setPan({ x: 0, y: 0 });
+                        } else {
+                          setActiveAreaFilter(area);
+                          setPan({
+                            x: -areaTheme.center.x * zoom,
+                            y: -areaTheme.center.y * zoom
+                          });
+                        }
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        isActive
+                          ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                      }`}
+                      style={{
+                        backgroundColor: isActive ? areaTheme.accentColor : undefined
+                      }}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full shrink-0"
+                        style={{ backgroundColor: isActive ? '#FFFFFF' : areaTheme.accentColor }}
+                      />
+                      <span>{area}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Card HUD Informativo */}
+              {activeAreaFilter ? (
+                <div
+                  className="mt-2.5 p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-800/50"
                   style={{
-                    backgroundColor: isActive ? areaTheme.accentColor : undefined,
-                    borderColor: isActive ? areaTheme.accentColor : undefined
+                    borderLeftWidth: 4,
+                    borderLeftColor: SCIENTIFIC_AREAS[activeAreaFilter].accentColor
                   }}
                 >
-                  {/* Ponto colorido chapado */}
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{
-                      backgroundColor: isActive ? '#FFFFFF' : areaTheme.accentColor
-                    }}
-                  />
-                  <span>{area}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
-                      isActive
-                        ? 'bg-black/20 text-white'
-                        : 'bg-stone-200/70 text-stone-500 dark:bg-stone-700 dark:text-stone-400'
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-stone-800 dark:text-stone-200">
+                      {SCIENTIFIC_AREAS[activeAreaFilter].label}
+                    </span>
+                    <span className="text-[10px] font-mono text-stone-500">
+                      {nodes.filter((n) => n.area === activeAreaFilter).length} artigos indexados
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-600 dark:text-stone-400 mt-1">
+                    {SCIENTIFIC_AREAS[activeAreaFilter].description}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      onClick={() => {
+                        const first = nodes.find((n) => n.area === activeAreaFilter);
+                        if (first) setSelectedNodeId(first.id);
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+                      style={{
+                        backgroundColor: SCIENTIFIC_AREAS[activeAreaFilter].accentColor
+                      }}
+                    >
+                      Ler artigo destaque da área ➔
+                    </button>
+                    <button
+                      onClick={() => {
+                        setActiveAreaFilter(null);
+                        setPan({ x: 0, y: 0 });
+                      }}
+                      className="text-[10px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 underline"
+                    >
+                      Ver todas as áreas
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 text-[11px] text-stone-400">
+                  Clique em qualquer área acima para abrir o raio-x e resumo do cluster.
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
 
-      {/* Plano de Coordenadas do Grafo */}
+      {/* ========================================================= */}
+      {/* PLANO DE COORDENADAS DO GRAFO                            */}
+      {/* ========================================================= */}
       <div
         className="absolute left-0 top-0 pointer-events-none"
         style={{
@@ -356,6 +999,10 @@ export const KnowledgeMap: React.FC = () => {
 
             if (!src || !tgt || src.x === undefined || tgt.x === undefined) return null;
 
+            const isSrcGhost = ghostedNodeIds.has(src.id);
+            const isTgtGhost = ghostedNodeIds.has(tgt.id);
+            const isGhostLine = isSrcGhost || isTgtGhost;
+
             const isConnectedToSelected =
               selectedNodeId && (src.id === selectedNodeId || tgt.id === selectedNodeId);
             const isConnectedToHovered =
@@ -363,18 +1010,37 @@ export const KnowledgeMap: React.FC = () => {
             const isInTrail =
               focusMode && explorationTrail.includes(src.id) && explorationTrail.includes(tgt.id);
 
+            // Destaque para conexões de ponte interdisciplinar na Variação 4
+            const isBridgeConn =
+              filterVariation === 'v4_interdisciplinar' &&
+              bridgeAreaA &&
+              bridgeAreaB &&
+              ((src.area === bridgeAreaA && tgt.area === bridgeAreaB) ||
+                (src.area === bridgeAreaB && tgt.area === bridgeAreaA));
+
             // Linha com cor chapada limpa
-            const strokeColor = isConnectedToSelected || isConnectedToHovered
+            let strokeColor = isConnectedToSelected || isConnectedToHovered
               ? theme === 'dark'
                 ? '#F8FAFC'
                 : '#0F172A'
+              : isBridgeConn
+              ? '#F59E0B'
               : isInTrail
               ? '#6366F1'
               : theme === 'dark'
               ? '#272E3F'
               : '#CBD5E1';
 
-            const strokeWidth = isConnectedToSelected || isConnectedToHovered ? 2 : 1.2;
+            let strokeWidth = isBridgeConn
+              ? 2.6
+              : isConnectedToSelected || isConnectedToHovered
+              ? 2
+              : 1.2;
+
+            if (isGhostLine) {
+              strokeColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+              strokeWidth = 0.8;
+            }
 
             return (
               <line
@@ -391,16 +1057,18 @@ export const KnowledgeMap: React.FC = () => {
           })}
         </svg>
 
-        {/* Camada de Esferas em Cores Chapadas (Flat Solid Colors, sem degradê) */}
-        {filteredNodes.map((node) => {
+        {/* Camada de Esferas em Cores Chapadas */}
+        {visibleNodes.map((node) => {
           const areaTheme = SCIENTIFIC_AREAS[node.area as ScientificArea];
           const isSelected = selectedNodeId === node.id;
           const isHovered = hoveredNodeId === node.id;
+          const isGhost = ghostedNodeIds.has(node.id);
 
           return (
             <div
               key={node.id}
               onMouseDown={(e) => {
+                if (isGhost) return;
                 e.stopPropagation();
                 if (e.button !== 0) return;
                 draggedNodeIdRef.current = node.id;
@@ -409,29 +1077,41 @@ export const KnowledgeMap: React.FC = () => {
                 node.fy = node.y;
               }}
               onClick={(e) => {
+                if (isGhost) return;
                 e.stopPropagation();
                 if (!didMoveNodeRef.current) {
                   setSelectedNodeId(node.id);
                 }
               }}
-              onMouseEnter={() => setHoveredNodeId(node.id)}
+              onMouseEnter={() => !isGhost && setHoveredNodeId(node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer ${
-                isSelected ? 'z-40' : isHovered ? 'z-30' : 'z-20'
-              }`}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto transition-opacity duration-200 ${
+                isGhost ? 'cursor-default pointer-events-none' : 'cursor-pointer'
+              } ${isSelected ? 'z-40' : isHovered ? 'z-30' : isGhost ? 'z-10' : 'z-20'}`}
               style={{
                 left: `${node.x}px`,
-                top: `${node.y}px`
+                top: `${node.y}px`,
+                opacity: isGhost ? ghostLevel : 1
               }}
             >
               <div className="relative flex items-center justify-center">
-                {/* Esfera em Cor Chapada Pura */}
+                {/* Esfera em Cor Chapada */}
                 <div
                   className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full transition-transform duration-150 flex items-center justify-center ${
-                    isSelected ? 'scale-125' : isHovered ? 'scale-115' : 'hover:scale-110'
+                    isSelected
+                      ? 'scale-125'
+                      : isHovered
+                      ? 'scale-115'
+                      : isGhost
+                      ? 'scale-90'
+                      : 'hover:scale-110'
                   }`}
                   style={{
-                    backgroundColor: areaTheme.accentColor,
+                    backgroundColor: isGhost
+                      ? theme === 'dark'
+                        ? '#334155'
+                        : '#94A3B8'
+                      : areaTheme.accentColor,
                     border: isSelected
                       ? '3px solid #FFFFFF'
                       : isHovered
@@ -440,8 +1120,8 @@ export const KnowledgeMap: React.FC = () => {
                   }}
                 />
 
-                {/* Tooltip do Nó em Hover */}
-                {(isHovered || isSelected) && (
+                {/* Tooltip do Nó em Hover (apenas para nós ativos) */}
+                {!isGhost && (isHovered || isSelected) && (
                   <div className="absolute top-full mt-2 px-2.5 py-1 rounded-lg bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 text-[11px] font-medium whitespace-nowrap shadow-md pointer-events-none z-50 flex items-center gap-1.5">
                     <span
                       className="w-2 h-2 rounded-full shrink-0"
