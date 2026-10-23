@@ -1,0 +1,427 @@
+Criar uma plataforma web mobile-first de compartilhamento e exploração de ideias científicas, voltada para cientistas, estudantes, pesquisadores e pessoas interessadas em ciência.
+O conceito central é criar uma espécie de “mapa vivo do conhecimento”: em vez de organizar o conteúdo exclusivamente em um feed cronológico, a plataforma representa ideias, projetos, perguntas, descobertas, experiências e discussões como elementos conectados em uma rede navegável.
+O objetivo não é transformar a interface em um grafo estatístico. A experiência deve parecer a exploração de um mapa de videogame casual: intuitiva, visual, curiosa e convidativa. O usuário deve sentir que está descobrindo regiões do conhecimento e encontrando conexões inesperadas entre diferentes áreas.
+Áreas científicas iniciais:
+Biologia
+Química
+Física
+Matemática
+Computação
+Humanidades
+A arquitetura deve permitir posteriormente adicionar outras áreas.
+CONCEITO PRINCIPAL
+Cada publicação é um “nó” do conhecimento. Uma publicação pode representar:
+uma ideia;
+uma pergunta;
+uma hipótese;
+um projeto;
+um resultado experimental;
+uma experiência acadêmica;
+uma explicação de conceito;
+uma descoberta;
+uma indicação de artigo;
+uma discussão;
+uma conexão entre duas áreas;
+uma aplicação de uma ideia em outro campo.
+As publicações podem ser conectadas umas às outras. Essas conexões formam uma rede de conhecimento coletiva.
+O sistema deve destacar especialmente conexões interdisciplinares.
+Por exemplo:
+Biologia → Redes neurais → Matemática → Teoria da informação → Inteligência Artificial
+ou:
+Química → Materiais → Física da matéria condensada → Computação quântica
+ou:
+Neurociência → Filosofia da mente → Inteligência Artificial → Teoria da informação.
+A plataforma deve permitir que essas conexões emerjam organicamente das interações dos usuários.
+EXPERIÊNCIA PRINCIPAL
+Ao entrar na plataforma, o usuário não deve ser recebido imediatamente por um feed infinito.
+A tela inicial deve apresentar um grande mapa explorável do conhecimento.
+O mapa possui seis grandes regiões correspondentes às áreas científicas:
+BIOLOGIA
+QUÍMICA
+FÍSICA
+MATEMÁTICA
+COMPUTAÇÃO
+HUMANIDADES
+Essas regiões devem funcionar como “continentes” ou “planetas” de conhecimento.
+Cada região contém diferentes comunidades, temas e publicações.
+As áreas não devem ficar rigidamente separadas. Suas fronteiras devem se sobrepor visualmente quando existirem muitas conexões entre elas.
+Por exemplo, uma região de “Biologia + Computação” pode surgir naturalmente quando muitos conteúdos conectam essas áreas.
+A interface deve comunicar visualmente:
+“Conhecimento não possui fronteiras rígidas.”
+MAPA DE CONHECIMENTO
+O mapa deve possuir três níveis de zoom.
+NÍVEL 1 — UNIVERSO DO CONHECIMENTO
+Mostrar as grandes áreas como regiões/planetas.
+O usuário consegue visualizar:
+áreas;
+intensidade de atividade;
+quantidade aproximada de ideias;
+conexões entre áreas;
+regiões interdisciplinares;
+atividade recente.
+Não mostrar milhares de nós simultaneamente.
+Agrupar elementos em clusters.
+Exemplo:
+[ BIOLOGIA ]──────[ QUÍMICA ]
+\ /
+\ /
+[ BIOQUÍMICA ]
+|
+[ MEDICINA ]
+A representação deve ser visual e orgânica, não um diagrama acadêmico tradicional. O usuário abre o app e vê "Ilhas" ou "Planetas" temáticos. Ele consegue ver onde estão os amigos dele ou onde há mais atividade em tempo real (como um mapa de calor no Mapa).
+NÍVEL 2 — REGIÃO / TEMA
+Quando o usuário entra em uma área, o mapa se aproxima.
+Mostrar temas e publicações como cards flutuantes.
+Exemplo dentro de Biologia:
+Neurociência
+Genética
+Ecologia
+Evolução
+Biologia Molecular
+Biologia Sintética
+Cada tema contém publicações conectadas.
+Os cards devem ter tamanho relativamente uniforme para evitar uma hierarquia visual excessiva.
+As conexões entre cards aparecem como linhas suaves.
+NÍVEL 3 — PUBLICAÇÃO
+Ao selecionar uma publicação, abrir uma experiência de leitura focada.
+A publicação ocupa a maior parte da tela.
+Mostrar:
+autor;
+área;
+título;
+texto;
+imagens ou figuras;
+referências;
+comentários;
+reações;
+conexões;
+publicações relacionadas.
+Ao redor ou abaixo da publicação devem aparecer as “portas” para outras ideias.
+Exemplo:
+            [Aplicação em IA]
+                    ↑
+                    |
+
+[Artigo relacionado] ← [IDEIA ATUAL] → [Matemática]
+|
+↓
+[Experimento]
+O usuário pode continuar explorando a partir dessas conexões.
+NAVEGAÇÃO
+Evitar depender exclusivamente de scroll infinito.
+O usuário deve poder navegar por:
+mapa;
+conexões;
+temas;
+busca;
+recomendações;
+perfil;
+histórico de exploração.
+A navegação deve transmitir sensação de descoberta.
+Em vez do gesto de arrastar para cima para ver o próximo post aleatório, o usuário desliza para os lados ou clica em setas temáticas. Por exemplo: Quando o usuário estiver lendo uma publicação, mostrar sugestões como:
+“Explore esta conexão”
+“De onde vem esta ideia?”
+“O que outras pessoas fizeram com essa ideia?”
+“Veja aplicações em outras áreas”
+“Explore ideias relacionadas”
+“Descubra uma perspectiva diferente”
+CONEXÕES ENTRE PUBLICAÇÕES
+Uma publicação deve poder ser conectada a outra de maneira extremamente simples.
+Ao criar uma publicação, oferecer:
+“Com o que esta ideia se conecta?”
+O usuário pode:
+pesquisar uma publicação;
+selecionar uma publicação recomendada;
+selecionar uma palavra ou trecho do próprio texto;
+criar uma conexão manual.
+Tipos de conexão:
+relacionado a;
+deriva de;
+contradiz;
+aplica;
+explica;
+complementa;
+pergunta;
+responde;
+inspira;
+utiliza método de;
+possui evidência para.
+Não tornar esses tipos obrigatórios. O usuário pode simplesmente criar uma conexão básica. 
+Quando alguém vai criar uma nova publicação, em vez de apenas apertar "Postar", o app pergunta: "A qual assunto ou post atual isso se conecta?". O usuário pode simplesmente arrastar o seu novo post e "soltá-lo" perto de um post existente. O app faz um efeito visual de "ímã" e cria o vínculo automaticamente.
+HIPERLINKS CONTEXTUAIS
+Inspirar-se na lógica da Wikipédia.
+O usuário pode selecionar uma palavra ou conceito dentro de uma publicação e transformá-lo em uma conexão.
+Por exemplo:
+“Redes neurais artificiais podem ser analisadas utilizando conceitos de teoria da informação.”
+O usuário pode selecionar “teoria da informação” e conectá-la a outra publicação.
+A plataforma cria automaticamente a relação visual no mapa.
+Isso transforma o próprio texto em uma porta de entrada para exploração.
+ANOTAÇÃO COLABORATIVA
+Incorporar uma funcionalidade inspirada em ferramentas como TeamTat (https://pmc.ncbi.nlm.nih.gov/articles/PMC7319445/).
+Usuários podem destacar trechos de uma publicação.
+Quando vários usuários destacarem o mesmo trecho, o sistema deve representar essa concentração visualmente.
+Quanto maior a quantidade de pessoas que destacaram determinada passagem, maior a intensidade visual do destaque.
+Isso cria um “heatmap coletivo de atenção”.
+Por exemplo:
+Trecho pouco destacado → destaque discreto.
+Trecho frequentemente destacado → destaque mais intenso.
+Trecho destacado por muitas pessoas → indicação como “Trecho em destaque”.
+Não utilizar isso como indicador automático de verdade ou qualidade científica. É apenas uma representação de atenção coletiva.
+Mostrar opcionalmente:
+“Destacado por 38 pessoas”
+“12 pessoas adicionaram comentários”
+“Este trecho gerou 5 discussões”
+NOTAS E COMENTÁRIOS
+Permitir que usuários adicionem:
+comentários;
+notas pessoais;
+perguntas;
+explicações;
+referências;
+respostas.
+As notas podem estar vinculadas diretamente a um trecho específico.
+REAÇÕES
+Permitir reações rápidas a trechos e publicações.
+As reações devem ser mais semânticas do que simplesmente “curtir”.
+Exemplos:
+💡 Interessante
+❓ Tenho uma dúvida
+🔬 Quero investigar
+🔗 Boa conexão
+🤔 Discordo
+❤️ Inspirador
+Evitar transformar a plataforma em uma competição de popularidade.
+O objetivo das reações é gerar metadados sobre como a comunidade está interagindo com as ideias.
+PUBLICAÇÃO
+A tela de criação deve ser extremamente simples.
+Campos:
+Título
+Texto
+Área principal
+Tags
+Referências
+Conectar a uma ideia existente
+Pergunta opcional:
+“Que tipo de contribuição é esta?”
+Opções:
+Ideia
+Pergunta
+Projeto
+Resultado
+Experiência
+Explicação
+Artigo
+Discussão
+Permitir imagens, gráficos, equações e arquivos científicos.
+Evitar excesso de campos obrigatórios.
+ANTI-COPY-PASTE / PARTICIPAÇÃO ATIVA
+A plataforma pode experimentar mecanismos que incentivem produção própria.
+Para determinados conteúdos educacionais ou discussões, considerar desabilitar copiar/colar diretamente do conteúdo.
+A intenção não é criar uma barreira de segurança, mas incentivar o usuário a formular a própria interpretação.
+Entretanto, referências e citações científicas devem continuar podendo ser copiadas de maneira apropriada.
+Não bloquear funcionalidades de acessibilidade ou ferramentas legítimas de leitura.
+PERFIS
+O perfil de cada usuário não deve ser apenas uma grade de posts.
+A "Linha do Tempo" vira uma Trilha: Em perfis pessoais, em vez de uma grade quadrada de fotos, o perfil do usuário pode ser uma "Trilha de Memórias" onde os posts que geraram conexões ou conversas ramificam para os lados, mostrando visualmente a evolução dos pensamentos ou eventos da vida dele.
+Criar uma “trilha intelectual”.
+Mostrar:
+ideias publicadas;
+projetos;
+perguntas;
+áreas de interesse;
+conexões criadas;
+colaborações;
+trajetória de exploração;
+principais temas;
+conexões interdisciplinares.
+Exemplo:
+Matemática
+↓
+Teoria dos grafos
+↓
+Redes biológicas
+↓
+Neurociência
+↓
+Inteligência Artificial
+O perfil deve comunicar a evolução dos interesses intelectuais da pessoa.
+O perfil também deve mostrar a trajetória competitiva do usuário:
+liga atual;
+XP da temporada;
+posição atual;
+melhores posições históricas;
+ofensiva atual;
+maior ofensiva;
+desafios concluídos;
+badges;
+áreas em que mais participa;
+contribuições interdisciplinares.
+A competição deve ser apresentada como parte da trajetória intelectual, e não como uma medida absoluta de capacidade.
+MAPA PESSOAL
+Cada usuário possui um pequeno mapa mostrando as áreas em que participa.
+Por exemplo:
+Biologia ───── Computação
+\ /
+\ /
+Matemática
+A espessura ou intensidade das conexões representa a quantidade de interações entre áreas, sem transformar isso em uma “pontuação de inteligência”.
+O mapa pessoal também pode destacar desafios disponíveis nas regiões que o usuário ainda não explorou.
+Exemplo:
+[Biologia]
+   🔬 Desafio disponível
+[Matemática]
+   🔒 Região parcialmente explorada
+[Computação]
+   🔥 Desafio do dia
+Isso conecta diretamente exploração, aprendizagem e competição.
+DESCOBERTA INTERDISCIPLINAR
+Esta deve ser uma das principais características do produto.
+Criar uma seção chamada:
+“Conexões inesperadas”
+Ela apresenta relações entre áreas que o usuário normalmente não exploraria.
+Exemplos:
+“Uma técnica da física está sendo utilizada em biologia.”
+“Este conceito matemático aparece em três projetos de computação.”
+“Uma discussão de filosofia está relacionada a este problema de inteligência artificial.”
+“Pesquisadores de áreas diferentes estão discutindo conceitos semelhantes.”
+O sistema deve favorecer descoberta, não simplesmente recomendar conteúdos semelhantes.
+BUSCA
+A busca não deve retornar apenas uma lista tradicional.
+Quando o usuário pesquisar:
+“criticalidade”
+o mapa deve:
+localizar os conceitos relevantes;
+destacar os nós encontrados;
+reduzir visualmente a intensidade do restante do mapa;
+mostrar as conexões desses nós;
+permitir que o usuário explore o caminho até eles.
+Exemplo:
+Você está aqui
+↓
+[Complexidade]
+↓
+[Criticalidade]
+↓
+[Redes]
+↓
+[Biologia]
+Mostrar o caminho de navegação como uma trilha.
+HISTÓRICO DE EXPLORAÇÃO
+Conforme o usuário navega pelo emaranhado de posts, a linha por onde ele passou fica brilhando (como um rastro de migalhas de pão). Isso impede que ele se sinta perdido e permite que ele volte facilmente para o post de onde começou a navegar há 10 minutos.
+Registrar visualmente o caminho percorrido pelo usuário.
+Se ele explorar:
+Biologia → Neurociência → Redes neurais → Teoria da informação → Matemática
+mostrar uma trilha discreta.
+Isso funciona como “breadcrumbs” visuais.
+O usuário pode voltar para qualquer ponto da exploração.
+NÉVOA DE DESCOBERTA
+Inspirar-se na “fog of war” de jogos.
+Não revelar todo o mapa simultaneamente.
+O usuário inicialmente visualiza apenas uma parte da rede. Ele só consegue enxergar as publicações que estão diretamente conectadas à que ele está lendo no momento.
+Conforme explora, novas conexões aparecem.
+Isso deve ser sutil e não impedir a busca direta.
+O objetivo é criar sensação de descoberta.
+HEATMAP DA COMUNIDADE
+Principal referência: https://medium.com/highlight-to-share/highlight-heatmaps-e8e4087cd8b5
+Além do mapa estrutural, mostrar atividade coletiva.
+Regiões com maior atividade podem apresentar maior intensidade visual.
+Exemplo:
+Biologia
+████████
+Computação
+██████
+Matemática
+████
+Humanidades
+███
+Porém, no mapa visual isso deve aparecer como densidade ou luminosidade, não como gráfico estatístico convencional.
+REFERÊNCIAS CIENTÍFICAS
+Publicações científicas citadas devem ser representadas como elementos conectáveis.
+Ao citar um artigo, permitir que o usuário visualize:
+artigo;
+autores;
+conceitos relacionados;
+publicações da comunidade que discutem o artigo;
+outras áreas que estão utilizando aquele trabalho.
+Criar uma ponte entre literatura científica e discussão informal da comunidade.
+DESIGN VISUAL
+O design deve combinar:
+mapa de exploração;
+interface de rede social;
+biblioteca científica;
+elementos de videogame casual.
+Evitar:
+aparência de dashboard corporativo;
+excesso de tabelas;
+gráficos estatísticos complexos;
+excesso de cores;
+visual excessivamente acadêmico;
+aparência de LinkedIn;
+feed infinito como mecanismo principal.
+Priorizar:
+espaço;
+profundidade;
+movimento suave;
+cards;
+conexões;
+clusters;
+zoom;
+microanimações;
+feedback visual.
+A estética deve ser moderna e científica, mas acessível para uma pessoa que não possui formação acadêmica.
+RESPONSIVIDADE
+Desktop:
+Utilizar o mapa como elemento principal.
+Mobile:
+Adaptar a experiência para exploração por toque.
+Não simplesmente reduzir o mapa desktop.
+No celular, utilizar:
+pinch-to-zoom;
+arrastar;
+cards;
+transições;
+navegação lateral;
+conexões apresentadas progressivamente.
+TECNOLOGIA DO PROTÓTIPO
+Criar o protótipo utilizando React.
+Para a primeira versão, utilizar uma biblioteca de visualização de grafos adequada, como Vis.js, Cytoscape.js ou equivalente.
+A arquitetura deve separar:
+interface;
+conteúdo;
+usuários;
+relações entre publicações;
+sistema de recomendações;
+visualização do grafo.
+A representação visual não precisa utilizar dados reais inicialmente.
+Criar dados fictícios suficientes para demonstrar:
+seis áreas científicas;
+pelo menos 30 publicações;
+diferentes clusters;
+conexões intra-área;
+conexões interdisciplinares;
+comentários;
+reações;
+destaques;
+referências.
+CRIAR UMA DEMONSTRAÇÃO INTERATIVA
+O protótipo deve permitir que o usuário:
+entre no mapa principal;
+escolha uma área;
+aproxime o mapa;
+escolha um tema;
+abra uma publicação;
+leia o conteúdo;
+destaque um trecho;
+veja comentários;
+reaja;
+visualize conexões;
+siga uma conexão para outra publicação;
+volte pelo histórico;
+pesquise um conceito;
+veja onde esse conceito está localizado no mapa;
+crie uma nova publicação;
+conecte a publicação a uma ideia existente.
+A experiência final deve comunicar uma ideia central:
+“Não existe apenas um feed de ciência. Existe um espaço onde ideias se encontram.”
+O produto deve fazer o usuário sentir que está explorando um mapa coletivo do conhecimento humano, no qual cada publicação é uma pequena peça e as conexões entre elas são tão importantes quanto as próprias publicações.
+
