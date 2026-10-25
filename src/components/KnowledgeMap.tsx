@@ -38,6 +38,7 @@ export const KnowledgeMap: React.FC = () => {
   const [selectedMultiAreas, setSelectedMultiAreas] = useState<ScientificArea[]>([]);
   const [ghostLevel, setGhostLevel] = useState<number>(0.15);
   const [selectedSubtopics, setSelectedSubtopics] = useState<string[]>([]);
+  const [v3SelectedAreas, setV3SelectedAreas] = useState<ScientificArea[]>(['Biologia']);
   const [v3BridgeTargetArea, setV3BridgeTargetArea] = useState<ScientificArea | null>(null);
   const [bridgeAreaA, setBridgeAreaA] = useState<ScientificArea>('Biologia');
   const [bridgeAreaB, setBridgeAreaB] = useState<ScientificArea>('Computação');
@@ -265,29 +266,38 @@ export const KnowledgeMap: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [filterVariation, zoom, setActiveAreaFilter, setPan]);
 
-  // Lista de subtópicos disponíveis para a variação 3 (Drill-down)
+  // Lista de subtópicos disponíveis para a variação 3 (suporta múltiplas áreas)
   const availableSubtopics = React.useMemo(() => {
-    if (!activeAreaFilter) return [];
+    const targetAreas =
+      v3SelectedAreas.length > 0
+        ? v3SelectedAreas
+        : (Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]);
+
     return Array.from(
       new Set(
         nodes
-          .filter((n) => n.area === activeAreaFilter)
+          .filter((n) => targetAreas.includes(n.area))
           .map((n) => n.subtopic)
           .filter(Boolean)
       )
     );
-  }, [nodes, activeAreaFilter]);
+  }, [nodes, v3SelectedAreas]);
 
   // Mapa de nós por ID
   const nodeByIdMap = React.useMemo(() => {
     return new Map(simNodesRef.current.map((n) => [n.id, n]));
   }, [nodes, connections]);
 
-  // Áreas externas conectadas à área ativa na Variação 3 (só ativadas se 2+ tags marcadas)
+  // Áreas externas conectadas às áreas e tags ativas na Variação 3 (só se 2+ tags marcadas)
   const connectedBridgeAreas = React.useMemo(() => {
-    if (!activeAreaFilter || selectedSubtopics.length < 2) {
+    if (selectedSubtopics.length < 2) {
       return [];
     }
+    const targetAreas =
+      v3SelectedAreas.length > 0
+        ? v3SelectedAreas
+        : (Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]);
+
     const set = new Set<ScientificArea>();
     connections.forEach((c) => {
       const srcId = typeof c.source === 'object' ? (c.source as any).id : c.source;
@@ -296,24 +306,28 @@ export const KnowledgeMap: React.FC = () => {
       const tgt = nodeByIdMap.get(tgtId);
       if (!src || !tgt) return;
 
-      if (src.area === activeAreaFilter && tgt.area !== activeAreaFilter) {
-        if (selectedSubtopics.includes(src.subtopic)) {
-          set.add(tgt.area);
-        }
-      } else if (tgt.area === activeAreaFilter && src.area !== activeAreaFilter) {
-        if (selectedSubtopics.includes(tgt.subtopic)) {
-          set.add(src.area);
-        }
+      const srcInSelected = targetAreas.includes(src.area) && selectedSubtopics.includes(src.subtopic);
+      const tgtInSelected = targetAreas.includes(tgt.area) && selectedSubtopics.includes(tgt.subtopic);
+
+      if (srcInSelected && !targetAreas.includes(tgt.area)) {
+        set.add(tgt.area);
+      } else if (tgtInSelected && !targetAreas.includes(src.area)) {
+        set.add(src.area);
       }
     });
     return Array.from(set);
-  }, [activeAreaFilter, selectedSubtopics, connections, nodeByIdMap]);
+  }, [v3SelectedAreas, selectedSubtopics, connections, nodeByIdMap]);
 
   // Nós participantes de pontes na Variação 3 (só ativos se 2 ou mais tags de subtópicos forem marcadas)
   const v3BridgeNodeIds = React.useMemo(() => {
-    if (filterVariation !== 'v3_drilldown' || !activeAreaFilter || selectedSubtopics.length < 2) {
+    if (filterVariation !== 'v3_drilldown' || selectedSubtopics.length < 2) {
       return new Set<string>();
     }
+    const targetAreas =
+      v3SelectedAreas.length > 0
+        ? v3SelectedAreas
+        : (Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]);
+
     const set = new Set<string>();
     connections.forEach((c) => {
       const srcId = typeof c.source === 'object' ? (c.source as any).id : c.source;
@@ -322,22 +336,19 @@ export const KnowledgeMap: React.FC = () => {
       const tgt = nodeByIdMap.get(tgtId);
       if (!src || !tgt) return;
 
-      // 1. Pontes internas entre dois subtópicos diferentes marcados
-      const isInternalBridge =
-        src.area === activeAreaFilter &&
-        tgt.area === activeAreaFilter &&
-        src.subtopic !== tgt.subtopic &&
-        selectedSubtopics.includes(src.subtopic) &&
-        selectedSubtopics.includes(tgt.subtopic);
+      const srcInSelected = targetAreas.includes(src.area) && selectedSubtopics.includes(src.subtopic);
+      const tgtInSelected = targetAreas.includes(tgt.area) && selectedSubtopics.includes(tgt.subtopic);
 
-      // 2. Pontes que cruzam para outro campo
+      // 1. Pontes internas entre dois subtópicos diferentes marcados (mesma área ou áreas distintas)
+      const isCrossSubtopicBridge =
+        srcInSelected && tgtInSelected && (src.subtopic !== tgt.subtopic || src.area !== tgt.area);
+
+      // 2. Pontes que cruzam para outro campo externo conectado
       const isCrossFieldBridge =
-        src.area !== tgt.area &&
-        ((src.area === activeAreaFilter && selectedSubtopics.includes(src.subtopic)) ||
-          (tgt.area === activeAreaFilter && selectedSubtopics.includes(tgt.subtopic))) &&
-        (!v3BridgeTargetArea || src.area === v3BridgeTargetArea || tgt.area === v3BridgeTargetArea);
+        (srcInSelected && !targetAreas.includes(tgt.area) && (!v3BridgeTargetArea || tgt.area === v3BridgeTargetArea)) ||
+        (tgtInSelected && !targetAreas.includes(src.area) && (!v3BridgeTargetArea || src.area === v3BridgeTargetArea));
 
-      if (isInternalBridge || isCrossFieldBridge) {
+      if (isCrossSubtopicBridge || isCrossFieldBridge) {
         set.add(srcId);
         set.add(tgtId);
       }
@@ -345,7 +356,7 @@ export const KnowledgeMap: React.FC = () => {
     return set;
   }, [
     filterVariation,
-    activeAreaFilter,
+    v3SelectedAreas,
     selectedSubtopics,
     v3BridgeTargetArea,
     connections,
@@ -407,22 +418,25 @@ export const KnowledgeMap: React.FC = () => {
         return true;
       }
 
-      // 4. Variação 3: Drill-down por Subtópicos (Pontes só ativas com 2+ tags marcadas)
+      // 4. Variação 3: Drill-down por Subtópicos (múltiplas áreas + pontes com 2+ tags)
       if (filterVariation === 'v3_drilldown') {
-        if (!activeAreaFilter) return true;
+        const targetAreas = v3SelectedAreas.length > 0 ? v3SelectedAreas : null;
 
+        // Se 2 ou mais tags marcadas:
         if (selectedSubtopics.length >= 2) {
           const isMarkedSubtopic =
-            n.area === activeAreaFilter && selectedSubtopics.includes(n.subtopic);
+            (!targetAreas || targetAreas.includes(n.area)) && selectedSubtopics.includes(n.subtopic);
           const isBridgeParticipant = v3BridgeNodeIds.has(n.id);
           return isMarkedSubtopic || isBridgeParticipant;
         }
 
+        // Se 1 tag marcada:
         if (selectedSubtopics.length === 1) {
-          return n.area === activeAreaFilter && selectedSubtopics.includes(n.subtopic);
+          return (!targetAreas || targetAreas.includes(n.area)) && selectedSubtopics.includes(n.subtopic);
         }
 
-        return n.area === activeAreaFilter;
+        // Se 0 tags marcadas: mostra nós das áreas selecionadas (ou todas se nenhuma selecionada)
+        return !targetAreas || targetAreas.includes(n.area);
       }
 
       // 5. Variação 4: Pontes Interdisciplinares
@@ -447,6 +461,7 @@ export const KnowledgeMap: React.FC = () => {
     filterVariation,
     selectedMultiAreas,
     activeAreaFilter,
+    v3SelectedAreas,
     selectedSubtopics,
     v3BridgeNodeIds,
     bridgeAreaA,
@@ -689,76 +704,131 @@ export const KnowledgeMap: React.FC = () => {
           )}
 
           {/* ======================================================== */}
-          {/* VARIAÇÃO 3: DRILL-DOWN EM CASCATA (ÁREA + SUBTÓPICOS + PONTES) */}
+          {/* VARIAÇÃO 3: DRILL-DOWN EM CASCATA (ÁREAS MÚLTIPLAS + SUBTÓPICOS + PONTES) */}
           {/* ======================================================== */}
           {filterVariation === 'v3_drilldown' && (
             <div className="space-y-2.5">
-              {/* Linha 1: Áreas */}
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <button
-                  onClick={() => {
-                    setActiveAreaFilter(null);
-                    setSelectedSubtopics([]);
-                    setV3BridgeTargetArea(null);
-                    setPan({ x: 0, y: 0 });
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                    activeAreaFilter === null
-                      ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
-                  }`}
-                >
-                  Todas as áreas
-                </button>
-
-                {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
-                  const areaTheme = SCIENTIFIC_AREAS[area];
-                  const isActive = activeAreaFilter === area;
-
-                  return (
-                    <button
-                      key={area}
-                      onClick={() => {
-                        if (isActive) {
-                          setActiveAreaFilter(null);
-                          setSelectedSubtopics([]);
-                          setV3BridgeTargetArea(null);
-                          setPan({ x: 0, y: 0 });
-                        } else {
-                          setActiveAreaFilter(area);
-                          setSelectedSubtopics([]);
-                          setV3BridgeTargetArea(null);
-                          setPan({
-                            x: -areaTheme.center.x * zoom,
-                            y: -areaTheme.center.y * zoom
-                          });
-                        }
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                        isActive
-                          ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
-                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+              {/* Linha 1: Áreas (Multi-seleção de Áreas) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5 text-[10px] uppercase font-bold text-stone-500">
+                  <div className="flex items-center gap-1.5">
+                    <span>Áreas de Artigos:</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded font-mono text-[9px] ${
+                        v3SelectedAreas.length > 0
+                          ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold'
+                          : 'bg-stone-200 dark:bg-stone-800 text-stone-500'
                       }`}
-                      style={{
-                        backgroundColor: isActive ? areaTheme.accentColor : undefined
-                      }}
                     >
-                      <span
-                        className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: isActive ? '#FFFFFF' : areaTheme.accentColor }}
-                      />
-                      <span>{area}</span>
+                      {v3SelectedAreas.length === 0
+                        ? 'Todas ativas'
+                        : `${v3SelectedAreas.length} selecionada${v3SelectedAreas.length !== 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+
+                  {v3SelectedAreas.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setV3SelectedAreas([]);
+                        setSelectedSubtopics([]);
+                        setV3BridgeTargetArea(null);
+                        setPan({ x: 0, y: 0 });
+                      }}
+                      className="text-[10px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 underline font-normal"
+                    >
+                      Ver todas
                     </button>
-                  );
-                })}
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <button
+                    onClick={() => {
+                      setV3SelectedAreas([]);
+                      setSelectedSubtopics([]);
+                      setV3BridgeTargetArea(null);
+                      setPan({ x: 0, y: 0 });
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                      v3SelectedAreas.length === 0
+                        ? 'bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-sm'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-400'
+                    }`}
+                  >
+                    Todas as áreas
+                  </button>
+
+                  {(Object.keys(SCIENTIFIC_AREAS) as ScientificArea[]).map((area) => {
+                    const areaTheme = SCIENTIFIC_AREAS[area];
+                    const isAreaSelected = v3SelectedAreas.includes(area);
+                    const count = nodes.filter((n) => n.area === area).length;
+
+                    return (
+                      <button
+                        key={area}
+                        onClick={() => {
+                          setV3SelectedAreas((prev) => {
+                            const next = prev.includes(area)
+                              ? prev.filter((a) => a !== area)
+                              : [...prev, area];
+
+                            if (next.length === 1) {
+                              const center = SCIENTIFIC_AREAS[next[0]].center;
+                              setPan({ x: -center.x * zoom, y: -center.y * zoom });
+                            } else if (next.length > 1) {
+                              const avgX =
+                                next.reduce((sum, a) => sum + SCIENTIFIC_AREAS[a].center.x, 0) /
+                                next.length;
+                              const avgY =
+                                next.reduce((sum, a) => sum + SCIENTIFIC_AREAS[a].center.y, 0) /
+                                next.length;
+                              setPan({ x: -avgX * zoom, y: -avgY * zoom });
+                            } else {
+                              setPan({ x: 0, y: 0 });
+                            }
+
+                            return next;
+                          });
+                          setSelectedSubtopics([]);
+                          setV3BridgeTargetArea(null);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                          isAreaSelected
+                            ? 'text-white shadow-sm ring-2 ring-offset-1 dark:ring-offset-stone-900'
+                            : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                        }`}
+                        style={{
+                          backgroundColor: isAreaSelected ? areaTheme.accentColor : undefined
+                        }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{
+                            backgroundColor: isAreaSelected ? '#FFFFFF' : areaTheme.accentColor
+                          }}
+                        />
+                        <span>{area}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono ${
+                            isAreaSelected
+                              ? 'bg-black/20 text-white'
+                              : 'bg-stone-200/70 text-stone-500 dark:bg-stone-700 dark:text-stone-400'
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Linha 2: Tags / Subtópicos da Área */}
-              {activeAreaFilter && availableSubtopics.length > 0 && (
+              {/* Linha 2: Tags / Subtópicos das Áreas Selecionadas */}
+              {availableSubtopics.length > 0 && (
                 <div className="pt-2 border-t border-stone-200/80 dark:border-stone-800/80">
                   <div className="text-[10px] uppercase font-bold text-stone-500 mb-1.5 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <span>Tags de {activeAreaFilter}:</span>
+                      <span>Tags / Subtópicos:</span>
                       <span
                         className={`px-1.5 py-0.2 rounded font-mono text-[9px] ${
                           selectedSubtopics.length >= 2
@@ -783,11 +853,16 @@ export const KnowledgeMap: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
                     {availableSubtopics.map((sub) => {
                       const isSubActive = selectedSubtopics.includes(sub);
+                      const matchingNode = nodes.find((n) => n.subtopic === sub);
+                      const areaOfSub = matchingNode?.area;
+                      const subTheme = areaOfSub ? SCIENTIFIC_AREAS[areaOfSub] : null;
                       const count = nodes.filter(
-                        (n) => n.area === activeAreaFilter && n.subtopic === sub
+                        (n) =>
+                          (v3SelectedAreas.length === 0 || v3SelectedAreas.includes(n.area)) &&
+                          n.subtopic === sub
                       ).length;
 
                       return (
@@ -805,11 +880,21 @@ export const KnowledgeMap: React.FC = () => {
                           }`}
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isSubActive ? 'bg-amber-400' : 'bg-stone-400'
-                            }`}
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{
+                              backgroundColor: isSubActive
+                                ? '#F59E0B'
+                                : subTheme
+                                ? subTheme.accentColor
+                                : '#78716C'
+                            }}
                           />
                           <span>{sub}</span>
+                          {areaOfSub && v3SelectedAreas.length !== 1 && (
+                            <span className="text-[9px] opacity-50 font-mono">
+                              ({areaOfSub.slice(0, 3)})
+                            </span>
+                          )}
                           <span className="opacity-60 font-mono text-[9px]">({count})</span>
                         </button>
                       );
@@ -818,89 +903,87 @@ export const KnowledgeMap: React.FC = () => {
                 </div>
               )}
 
-              {/* Linha 3: Pontes (só aparecem se os usuários marcarem 2 tags ou mais da área) */}
-              {activeAreaFilter && (
-                <div className="pt-2 border-t border-stone-200/80 dark:border-stone-800/80">
-                  {selectedSubtopics.length < 2 ? (
-                    <div className="py-2 px-3 rounded-xl bg-stone-100/70 dark:bg-stone-800/40 border border-dashed border-stone-200 dark:border-stone-700 flex items-center justify-between text-[11px] text-stone-500">
-                      <span className="flex items-center gap-2">
-                        <span className="text-base">🌉</span>
-                        <span>
-                          Marque <strong>2 tags ou mais</strong> para revelar as pontes de conexão desta área
-                        </span>
+              {/* Linha 3: Pontes (só aparecem se os usuários marcarem 2 tags ou mais) */}
+              <div className="pt-2 border-t border-stone-200/80 dark:border-stone-800/80">
+                {selectedSubtopics.length < 2 ? (
+                  <div className="py-2 px-3 rounded-xl bg-stone-100/70 dark:bg-stone-800/40 border border-dashed border-stone-200 dark:border-stone-700 flex items-center justify-between text-[11px] text-stone-500">
+                    <span className="flex items-center gap-2">
+                      <span className="text-base">🌉</span>
+                      <span>
+                        Marque <strong>2 tags ou mais</strong> para revelar as pontes de conexão entre tópicos e campos
                       </span>
-                      <span className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 font-semibold">
-                        {selectedSubtopics.length}/2 tags
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm">🌉</span>
-                          <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">
-                            Pontes Reveladas ({selectedSubtopics.length} tags marcadas):
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-mono text-stone-500">
-                          {v3BridgeNodeIds.size} artigos conectados em pontes
+                    </span>
+                    <span className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 font-semibold">
+                      {selectedSubtopics.length}/2 tags
+                    </span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🌉</span>
+                        <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400">
+                          Pontes Reveladas ({selectedSubtopics.length} tags marcadas):
                         </span>
                       </div>
+                      <span className="text-[10px] font-mono text-stone-500">
+                        {v3BridgeNodeIds.size} artigos conectados em pontes
+                      </span>
+                    </div>
 
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <button
-                          onClick={() => setV3BridgeTargetArea(null)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
-                            v3BridgeTargetArea === null
-                              ? 'bg-amber-500 text-white shadow-sm'
-                              : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 border border-amber-500/30'
-                          }`}
-                        >
-                          <span>🔗</span>
-                          <span>Todas as pontes</span>
-                        </button>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      <button
+                        onClick={() => setV3BridgeTargetArea(null)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                          v3BridgeTargetArea === null
+                            ? 'bg-amber-500 text-white shadow-sm'
+                            : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 border border-amber-500/30'
+                        }`}
+                      >
+                        <span>🔗</span>
+                        <span>Todas as pontes ativas</span>
+                      </button>
 
-                        {connectedBridgeAreas.map((targetArea) => {
-                          const isTargetActive = v3BridgeTargetArea === targetArea;
-                          const targetTheme = SCIENTIFIC_AREAS[targetArea];
+                      {connectedBridgeAreas.map((targetArea) => {
+                        const isTargetActive = v3BridgeTargetArea === targetArea;
+                        const targetTheme = SCIENTIFIC_AREAS[targetArea];
 
-                          return (
-                            <button
-                              key={`v3-bridge-${targetArea}`}
-                              onClick={() => {
-                                setV3BridgeTargetArea(isTargetActive ? null : targetArea);
-                              }}
-                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
-                                isTargetActive
-                                  ? 'text-white shadow-sm ring-1 ring-white/50'
-                                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
-                              }`}
+                        return (
+                          <button
+                            key={`v3-bridge-${targetArea}`}
+                            onClick={() => {
+                              setV3BridgeTargetArea(isTargetActive ? null : targetArea);
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all ${
+                              isTargetActive
+                                ? 'text-white shadow-sm ring-1 ring-white/50'
+                                : 'bg-stone-100 text-stone-700 hover:bg-stone-200 dark:bg-stone-800 dark:text-stone-300'
+                            }`}
+                            style={{
+                              backgroundColor: isTargetActive ? targetTheme.accentColor : undefined
+                            }}
+                          >
+                            <span className="text-[10px] opacity-75">➔</span>
+                            <span
+                              className="w-1.5 h-1.5 rounded-full"
                               style={{
-                                backgroundColor: isTargetActive ? targetTheme.accentColor : undefined
+                                backgroundColor: isTargetActive ? '#FFFFFF' : targetTheme.accentColor
                               }}
-                            >
-                              <span className="text-[10px] opacity-75">➔</span>
-                              <span
-                                className="w-1.5 h-1.5 rounded-full"
-                                style={{
-                                  backgroundColor: isTargetActive ? '#FFFFFF' : targetTheme.accentColor
-                                }}
-                              />
-                              <span>Ponte c/ {targetArea}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      <div className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
-                        {v3BridgeTargetArea
-                          ? `● Exibindo pontes entre as tags marcadas e o campo de ${v3BridgeTargetArea}`
-                          : `● Exibindo pontes entre os subtópicos marcados e com outros campos`}
-                      </div>
+                            />
+                            <span>Ponte c/ {targetArea}</span>
+                          </button>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
-              )}
+
+                    <div className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+                      {v3BridgeTargetArea
+                        ? `● Exibindo pontes entre as tags marcadas e o campo de ${v3BridgeTargetArea}`
+                        : `● Exibindo pontes entre os subtópicos marcados (mesma área ou interdisciplinares)`}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -1202,21 +1285,19 @@ export const KnowledgeMap: React.FC = () => {
               focusMode && explorationTrail.includes(src.id) && explorationTrail.includes(tgt.id);
 
             // Destaque para conexões de ponte na Variação 3 (apenas se 2+ tags marcadas) ou Variação 4
+            const targetAreasV3 = v3SelectedAreas.length > 0 ? v3SelectedAreas : null;
             const isV3BridgeConn =
               filterVariation === 'v3_drilldown' &&
-              activeAreaFilter &&
               selectedSubtopics.length >= 2 &&
               (
-                // 1. Ponte interna entre dois subtópicos diferentes marcados
-                (src.area === activeAreaFilter &&
-                  tgt.area === activeAreaFilter &&
-                  src.subtopic !== tgt.subtopic &&
+                // 1. Ponte entre dois subtópicos diferentes marcados
+                ((!targetAreasV3 || (targetAreasV3.includes(src.area) && targetAreasV3.includes(tgt.area))) &&
+                  (src.subtopic !== tgt.subtopic || src.area !== tgt.area) &&
                   selectedSubtopics.includes(src.subtopic) &&
                   selectedSubtopics.includes(tgt.subtopic)) ||
                 // 2. Ponte que cruza para outro campo científico externo
-                (src.area !== tgt.area &&
-                  ((src.area === activeAreaFilter && selectedSubtopics.includes(src.subtopic)) ||
-                    (tgt.area === activeAreaFilter && selectedSubtopics.includes(tgt.subtopic))) &&
+                ((((!targetAreasV3 || targetAreasV3.includes(src.area)) && selectedSubtopics.includes(src.subtopic) && (!targetAreasV3 || !targetAreasV3.includes(tgt.area))) ||
+                  ((!targetAreasV3 || targetAreasV3.includes(tgt.area)) && selectedSubtopics.includes(tgt.subtopic) && (!targetAreasV3 || !targetAreasV3.includes(src.area)))) &&
                   (!v3BridgeTargetArea || src.area === v3BridgeTargetArea || tgt.area === v3BridgeTargetArea))
               );
 
