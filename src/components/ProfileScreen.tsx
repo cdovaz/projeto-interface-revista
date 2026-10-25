@@ -3,6 +3,7 @@ import {
   ExternalLink,
   BookOpen,
   ArrowUpRight,
+  BookmarkCheck,
   GraduationCap,
   Globe,
   Code2,
@@ -86,7 +87,7 @@ export const ProfileScreen: React.FC = () => {
     { area: 'Física', percent: 6, articlesRead: 7 }
   ];
 
-  // 2. 3 Leituras Recomendadas (Cards Prism 2+4 Limpos em 3 Colunas)
+  // 2. 3 Leituras Recomendadas (Cards Prism 2+4 Limpos em 3 Colunas — V1)
   const recommendedNodeIds = ['comp-5', 'bio-1', 'mat-1'];
   const recommendedPapers = recommendedNodeIds
     .map((id) => nodes.find((n) => n.id === id))
@@ -503,19 +504,23 @@ export const ProfileScreen: React.FC = () => {
           </div>
         </section>
 
-        {/* ================= 2. 3 LEITURAS RECOMENDADAS ================= */}
-        <section className="rounded-3xl border border-stone-200/80 dark:border-white/10 bg-white/95 dark:bg-[#0C101B]/95 backdrop-blur-xl p-6 lg:p-7 space-y-4">
-          <div className="flex items-center justify-between border-b border-stone-200/80 dark:border-white/10 pb-3.5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <h2 className="font-editorial text-xl font-bold">3 Leituras Recomendadas</h2>
+        {/* ================= 2. 3 LEITURAS RECOMENDADAS (PRISM 2+4 EM 3 COLUNAS) ================= */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/15 text-indigo-400 flex items-center justify-center">
+              <BookmarkCheck className="w-4 h-4" />
             </div>
-            <span className="font-mono text-[10px] text-stone-400">
-              Baseadas no seu interesse transdisciplinar
-            </span>
+            <div>
+              <h2 className="font-editorial text-xl font-bold text-stone-900 dark:text-stone-100">
+                3 Leituras Recomendadas
+              </h2>
+              <p className="text-xs font-mono text-stone-400">
+                Curadoria pessoal dos 3 textos essenciais no mapa
+              </p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {recommendedPapers.map((node) => {
               const areaTheme = SCIENTIFIC_AREAS[node.area];
               const isHovered = hoveredCardId === `rec-${node.id}`;
@@ -526,26 +531,41 @@ export const ProfileScreen: React.FC = () => {
                   onMouseEnter={() => setHoveredCardId(`rec-${node.id}`)}
                   onMouseLeave={() => setHoveredCardId(null)}
                   onClick={() => handleOpenNode(node.id)}
-                  className="relative group cursor-pointer"
+                  className="relative group cursor-pointer h-full"
                 >
+                  {/* 3ª Camada (Mais Profunda — Prism) */}
                   <div
-                    className="absolute inset-0 rounded-2xl transition-opacity duration-200 pointer-events-none"
+                    className="absolute inset-0 rounded-2xl transition-all duration-300 pointer-events-none"
                     style={{
-                      backgroundColor: areaTheme.accentColor,
-                      opacity: isHovered ? 0.08 : 0
+                      background: `linear-gradient(135deg, ${areaTheme.accentColor} 0%, transparent 110%)`,
+                      opacity: isHovered ? 0.45 : 0.08,
+                      filter: isHovered ? 'blur(2.5px)' : 'blur(0.5px)',
+                      transform: isHovered ? 'translate(8px, 8px)' : 'translate(3.5px, 3.5px)'
                     }}
                   />
 
+                  {/* 2ª Camada (Intermediária — Prism) */}
                   <div
-                    className="relative h-full p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between"
+                    className="absolute inset-0 rounded-2xl transition-all duration-200 pointer-events-none"
                     style={{
-                      borderColor: isHovered ? areaTheme.accentColor : 'rgba(148, 163, 184, 0.16)',
+                      background: `linear-gradient(135deg, ${areaTheme.accentColor} 15%, ${areaTheme.glowColor} 100%)`,
+                      opacity: isHovered ? 0.9 : 0.24,
+                      filter: isHovered ? 'blur(0.5px)' : 'none',
+                      transform: isHovered ? 'translate(4px, 4px)' : 'translate(1.8px, 1.8px)'
+                    }}
+                  />
+
+                  {/* 1ª Camada (Card Frontal Frosted Glass) */}
+                  <div
+                    className="relative p-4 rounded-2xl border backdrop-blur-xl bg-white/95 dark:bg-[#0E131F]/95 transition-all duration-200 flex flex-col justify-between h-full"
+                    style={{
+                      borderColor: isHovered
+                        ? areaTheme.accentColor
+                        : 'rgba(148, 163, 184, 0.16)',
+                      transform: isHovered ? 'translate(-2px, -2px)' : 'none',
                       boxShadow: isHovered
-                        ? `0 0 0 1px ${areaTheme.accentColor}, 0 8px 20px -8px ${areaTheme.glowColor}`
-                        : 'none',
-                      backgroundColor: isHovered
-                        ? 'rgba(255, 255, 255, 0.8)'
-                        : 'rgba(255, 255, 255, 0.4)'
+                        ? `0 8px 22px -8px ${areaTheme.glowColor}`
+                        : 'none'
                     }}
                   >
                     <div>
